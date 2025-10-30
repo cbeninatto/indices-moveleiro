@@ -2,13 +2,12 @@
 <html lang="pt-br">
 <head>
 <meta charset="utf-8"/>
-<title>Índices Moveleiro — Dashboard v4.4</title>
+<title>Índices Moveleiro — Dashboard v4.5</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 
-<!-- Plotly + CSV parser -->
+<!-- Core libs (CDNs) -->
 <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
-<!-- PDF export libs -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
@@ -16,9 +15,14 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap');
 
 :root{
-  --bg:#dfe1e1; --card:#fff; --shadow:0 3px 10px rgba(0,0,0,.08);
-  --title-bg:#000; --title-fg:#fff; --accent:#f5b95f; --accent-border:#e5be74;
-  --header-bg: rgba(0,0,0,0.9);
+  --bg:#dfe1e1;
+  --card:#fff;
+  --shadow:0 3px 10px rgba(0,0,0,.08);
+  --title-bg:#000;
+  --title-fg:#fff;
+  --accent:#f5b95f;
+  --accent-border:#e5be74;
+  --header-bg:rgba(0,0,0,0.9);
 }
 
 *{box-sizing:border-box}
@@ -38,7 +42,7 @@ body{background:var(--bg);font-family:Inter,Arial,sans-serif;color:#111;margin:2
 }
 .header .btn:hover{background:#000;color:#fff;border-color:#000}
 
-/* Sections & cards */
+/* Sections */
 section{margin-bottom:18px}
 .titlebar{
   background:var(--title-bg); color:var(--title-fg);
@@ -61,7 +65,7 @@ section{margin-bottom:18px}
 }
 .rbtn.active, .rbtn:hover{background:#000;color:#fff;border-color:#000}
 
-/* Charts */
+/* Charts (restored heights) */
 #chartGeral{width:100%;height:600px}
 .chart{width:100%;height:600px}
 
@@ -83,24 +87,23 @@ section{margin-bottom:18px}
   .header{flex-wrap:wrap; gap:8px}
 }
 
-/* Print cleanup (if user prints page) */
-@media print {
-  body { background:#fff; margin:0 }
-}
+/* Print baseline (in case of native print) */
+@media print { body { background:#fff; margin:0 } }
 </style>
 </head>
 <body>
-<div id="page">
 
+<!-- ===== PDF PAGE 1 WRAPPER: header + Visão Geral ===== -->
+<div id="pdf-page1">
   <!-- Header (non-sticky) -->
   <div class="header">
-    <div class="title">Índices Moveleiro <span style="opacity:.7">v4.4</span></div>
+    <div class="title">Índices Moveleiro <span style="opacity:.7">v4.5</span></div>
     <div class="meta" id="lastUpdateHeader">Última atualização: —</div>
     <div class="spacer"></div>
     <button class="btn" id="btnExportAll">Exportar PDF</button>
   </div>
 
-  <!-- ===== MAIN (Visão Geral) — collapsible, starts open ===== -->
+  <!-- Visão Geral (collapsible, starts open) -->
   <section id="geral">
     <div class="titlebar collapsible" data-target="geral-card">
       <span>Visão Geral</span>
@@ -121,8 +124,11 @@ section{margin-bottom:18px}
       </div>
     </div>
   </section>
+</div>
 
-  <!-- ===== COLLAPSIBLE: CRC ===== -->
+<!-- ===== PDF PAGE 2 WRAPPER: remaining sections only ===== -->
+<div id="pdf-page2">
+  <!-- CRC -->
   <section id="crc">
     <div class="titlebar collapsible" data-target="crc-card">
       <span>Aço CRC China (USD/TON)</span><span class="caret" id="caret-crc">▶</span>
@@ -142,7 +148,7 @@ section{margin-bottom:18px}
     </div>
   </section>
 
-  <!-- ===== COLLAPSIBLE: IRON ===== -->
+  <!-- Iron -->
   <section id="iron">
     <div class="titlebar collapsible" data-target="iron-card">
       <span>Minério de Ferro (USD/TON)</span><span class="caret" id="caret-iron">▶</span>
@@ -162,7 +168,7 @@ section{margin-bottom:18px}
     </div>
   </section>
 
-  <!-- ===== COLLAPSIBLE: FREIGHT ===== -->
+  <!-- Freight -->
   <section id="freight">
     <div class="titlebar collapsible" data-target="freight-card">
       <span>Frete Marítimo (USD/TEU)</span><span class="caret" id="caret-freight">▶</span>
@@ -182,7 +188,7 @@ section{margin-bottom:18px}
     </div>
   </section>
 
-  <!-- ===== COLLAPSIBLE: FX ===== -->
+  <!-- FX -->
   <section id="fx">
     <div class="titlebar collapsible" data-target="fx-card">
       <span>Taxas de Câmbio (USD/BRL e USD/CNY)</span><span class="caret" id="caret-fx">▶</span>
@@ -201,11 +207,12 @@ section{margin-bottom:18px}
       </div>
     </div>
   </section>
-
-</div> <!-- /#page -->
+</div>
 
 <script>
-/* ===== Data loading ===== */
+/* =========================
+   Data loading & utilities
+   ========================= */
 const CSV_URL="data/indices_moveleiro.csv";
 let RAW=null;
 const PT_ABBR=["JAN","FEV","MAR","ABR","MAI","JUN","JUL","AGO","SET","OUT","NOV","DEZ"];
@@ -231,15 +238,23 @@ function loadCSV(){
   });
 }
 
-/* ===== Utilities ===== */
-const isMobile = () => window.innerWidth < 720;
-
-function monthTicks(dates){
+/* Alternate month ticks: show only even months (FEV, ABR, JUN, AGO, OUT, DEZ) */
+function evenMonthTicks(dates){
   const seen=new Set(), tickvals=[], ticktext=[];
-  for(const x of dates){ const dt=new Date(x), key=dt.getFullYear()+"-"+(dt.getMonth()+1);
-    if(!seen.has(key)){ seen.add(key); tickvals.push(x); ticktext.push(PT_ABBR[dt.getMonth()]); } }
+  for(const iso of dates){
+    const dt=new Date(iso);
+    const month = dt.getMonth()+1; // 1..12
+    const key = dt.getFullYear()+"-"+month;
+    if(month % 2 === 0 && !seen.has(key)){ // only even months
+      seen.add(key);
+      tickvals.push(iso);
+      ticktext.push(PT_ABBR[dt.getMonth()]);
+    }
+  }
   return {tickvals, ticktext};
 }
+
+/* Slice by months helper (null means full range) */
 function sliceByMonths(dates, arraysObj, months){
   if(months==null) return {dates:[...dates], ...Object.fromEntries(Object.keys(arraysObj).map(k=>[k,[...arraysObj[k]]]))};
   const last=new Date(dates[dates.length-1]);
@@ -251,6 +266,8 @@ function sliceByMonths(dates, arraysObj, months){
   for(const k in arraysObj) outObj[k]= arraysObj[k].slice(start);
   return {dates:outDates, ...outObj};
 }
+
+/* Quarterly changes + last-month line (unchanged) */
 function quarterChanges(dates, vals){
   const yearly={};
   for(let i=0;i<dates.length;i++){
@@ -285,30 +302,33 @@ function renderSummary(containerId, qData, dates, vals){
   el.innerHTML = `${block(y1)}${block(y2)}<div class='last-month'>${lastMonthLine(dates,vals)}</div>`;
 }
 
-/* ===== Global state for per-chart ranges ===== */
-const RANGES = {geral:"Tudo", crc:"Tudo", iron:"Tudo", freight:"Tudo", fx:"Tudo"}; // 3M,6M,1A,5A,Tudo
+/* Per-chart ranges */
+const RANGES = {geral:"Tudo", crc:"Tudo", iron:"Tudo", freight:"Tudo", fx:"Tudo"};
 const RANGE_TO_MONTHS = { "3M":3, "6M":6, "1A":12, "5A":60, "Tudo":null };
 
-/* ===== Plot helpers ===== */
-function lineCfg(color){ return {mode:'lines+markers', line:{shape:'spline',smoothing:.6,width:2.2,color:color}, marker:{size:8,line:{width:1,color:'#fff'}}}; }
-function axisLayout(baseTitle, opts={}){
+/* Plot helpers */
+const isMobile = () => window.innerWidth < 720;
+function lineCfg(color){ return {mode:'lines+markers', line:{shape:'spline',smoothing:.6,width:2,color:color}, marker:{size:5,line:{width:1,color:'#fff'}}}; }
+function axisLayout(baseTitle, xticks){
   const tf = isMobile() ? 10 : 12;  // tick font size
   return {
     hovermode:'x unified',
-    legend:{orientation:'h', y:1.12, font:{size:isMobile()?11:12}},
-    xaxis:{showgrid:false, tickmode:'array', ...opts.xticks, tickfont:{size:tf}, automargin:true},
+    legend:{orientation:'h', y:-0.25, font:{size:isMobile()?11:12}}, /* legend below the chart */
+    xaxis:{showgrid:false, tickmode:'array', ...xticks, tickfont:{size:tf}, automargin:true},
     yaxis:{gridcolor:'#e9ecef', zeroline:false, title:baseTitle, tickfont:{size:tf}, automargin:true},
     paper_bgcolor:'#fff', plot_bgcolor:'#fff',
-    margin:{t:40,r:30,b:60,l:60}
+    margin:{t:40,r:30,b:80,l:60}
   };
 }
 
-/* ===== Drawers ===== */
+/* =========================
+   Drawers (charts)
+   ========================= */
 function drawGeral(){
   const m = RANGE_TO_MONTHS[RANGES.geral];
   const sliced = sliceByMonths(RAW.date, {crc:RAW.crc, iron:RAW.iron, freight:RAW.freight, usdbrl:RAW.usdbrl, usdcny:RAW.usdcny}, m);
   const D = {date:sliced.dates, ...sliced};
-  const {tickvals,ticktext}=monthTicks(D.date);
+  const {tickvals,ticktext}=evenMonthTicks(D.date);
   const lastHeader=document.getElementById('lastUpdateHeader');
   const lastBadge=document.getElementById('lastUpdate');
   if (RAW.date.length){
@@ -324,7 +344,7 @@ function drawGeral(){
     {x:D.date,y:D.usdbrl,name:'USD/BRL',yaxis:'y2',...lineCfg('#7e57c2')},
     {x:D.date,y:D.usdcny,name:'USD/CNY',yaxis:'y2',...lineCfg('#e53935')}
   ],{
-    ...axisLayout('USD/TON (CRC, Minério, Frete)', {xticks:{tickvals, ticktext}}),
+    ...axisLayout('USD/TON (CRC, Minério, Frete)', {tickvals, ticktext}),
     yaxis2:{title:'Câmbio (USD/BRL, USD/CNY)', overlaying:'y', side:'right', tickfont:{size:isMobile()?10:12}, automargin:true}
   }, {responsive:true});
   renderSummary('summaryGeral', quarterChanges(RAW.date, RAW.crc), RAW.date, RAW.crc);
@@ -334,10 +354,10 @@ function drawCRC(){
   const m = RANGE_TO_MONTHS[RANGES.crc];
   const sliced = sliceByMonths(RAW.date, {crc:RAW.crc}, m);
   const D = {date:sliced.dates, y:sliced.crc};
-  const {tickvals,ticktext}=monthTicks(D.date);
+  const {tickvals,ticktext}=evenMonthTicks(D.date);
   Plotly.newPlot('chartCRC',[
     {x:D.date,y:D.y,name:'Aço CRC China (USD/TON)',...lineCfg('#007bff')}
-  ], axisLayout('USD/TON', {xticks:{tickvals, ticktext}}), {responsive:true});
+  ], axisLayout('USD/TON', {tickvals, ticktext}), {responsive:true});
   renderSummary('summaryCRC', quarterChanges(RAW.date, RAW.crc), RAW.date, RAW.crc);
 }
 
@@ -345,10 +365,10 @@ function drawIron(){
   const m = RANGE_TO_MONTHS[RANGES.iron];
   const sliced = sliceByMonths(RAW.date, {iron:RAW.iron}, m);
   const D = {date:sliced.dates, y:sliced.iron};
-  const {tickvals,ticktext}=monthTicks(D.date);
+  const {tickvals,ticktext}=evenMonthTicks(D.date);
   Plotly.newPlot('chartIron',[
     {x:D.date,y:D.y,name:'Minério de Ferro (USD/TON)',...lineCfg('#ff6f00')}
-  ], axisLayout('USD/TON', {xticks:{tickvals, ticktext}}), {responsive:true});
+  ], axisLayout('USD/TON', {tickvals, ticktext}), {responsive:true});
   renderSummary('summaryIron', quarterChanges(RAW.date, RAW.iron), RAW.date, RAW.iron);
 }
 
@@ -356,10 +376,10 @@ function drawFreight(){
   const m = RANGE_TO_MONTHS[RANGES.freight];
   const sliced = sliceByMonths(RAW.date, {freight:RAW.freight}, m);
   const D = {date:sliced.dates, y:sliced.freight};
-  const {tickvals,ticktext}=monthTicks(D.date);
+  const {tickvals,ticktext}=evenMonthTicks(D.date);
   Plotly.newPlot('chartFreight',[
     {x:D.date,y:D.y,name:'Frete Marítimo (USD/TEU)',...lineCfg('#00bfa6')}
-  ], axisLayout('USD/TEU', {xticks:{tickvals, ticktext}}), {responsive:true});
+  ], axisLayout('USD/TEU', {tickvals, ticktext}), {responsive:true});
   renderSummary('summaryFreight', quarterChanges(RAW.date, RAW.freight), RAW.date, RAW.freight);
 }
 
@@ -367,21 +387,23 @@ function drawFX(){
   const m = RANGE_TO_MONTHS[RANGES.fx];
   const sliced = sliceByMonths(RAW.date, {usdbrl:RAW.usdbrl, usdcny:RAW.usdcny}, m);
   const D = {date:sliced.dates, usdbrl:sliced.usdbrl, usdcny:sliced.usdcny};
-  const {tickvals,ticktext}=monthTicks(D.date);
+  const {tickvals,ticktext}=evenMonthTicks(D.date);
   const minB=Math.min(...D.usdbrl.filter(v=>v!=null)), maxB=Math.max(...D.usdbrl.filter(v=>v!=null));
   const minC=Math.min(...D.usdcny.filter(v=>v!=null)), maxC=Math.max(...D.usdcny.filter(v=>v!=null));
   Plotly.newPlot('chartFX',[
     {x:D.date,y:D.usdbrl,name:'USD/BRL',...lineCfg('#7e57c2')},
     {x:D.date,y:D.usdcny,name:'USD/CNY',yaxis:'y2',...lineCfg('#e53935')}
   ],{
-    ...axisLayout('USD/BRL', {xticks:{tickvals, ticktext}}),
+    ...axisLayout('USD/BRL', {tickvals, ticktext}),
     yaxis:{...axisLayout('').yaxis, title:'USD/BRL', range:[minB*0.98, maxB*1.02]},
     yaxis2:{title:'USD/CNY', overlaying:'y', side:'right', range:[minC*0.98, maxC*1.02], tickfont:{size:isMobile()?10:12}, automargin:true}
   }, {responsive:true});
   renderSummary('summaryFX', quarterChanges(RAW.date, RAW.usdbrl), RAW.date, RAW.usdbrl);
 }
 
-/* ===== Accordion ===== */
+/* =========================
+   Accordion (toggle sections)
+   ========================= */
 function setExpanded(cardWrap, caretEl, expand){
   if (expand){
     cardWrap.style.display = 'block';
@@ -413,7 +435,7 @@ function initAccordion(){
     });
   });
 
-  // Initial states
+  // Initial states (Visão Geral open, others closed)
   setExpanded(document.getElementById('geral-card'), document.getElementById('caret-geral'), true);
   setExpanded(document.getElementById('crc-card'), document.getElementById('caret-crc'), false);
   setExpanded(document.getElementById('iron-card'), document.getElementById('caret-iron'), false);
@@ -421,7 +443,9 @@ function initAccordion(){
   setExpanded(document.getElementById('fx-card'), document.getElementById('caret-fx'), false);
 }
 
-/* ===== Range selectors ===== */
+/* =========================
+   Range selectors (per chart)
+   ========================= */
 function setRangeActive(rangeBarId, key){
   const bar=document.getElementById(rangeBarId);
   bar.querySelectorAll('.rbtn[data-range]').forEach(b=>b.classList.toggle('active', b.dataset.range===key));
@@ -445,42 +469,66 @@ function initRanges(){
   });
 }
 
-/* ===== Export entire page to PDF (landscape, no cropping) ===== */
-async function exportPagePDF(){
+/* =========================
+   PDF Export (2 pages, landscape)
+   - Page 1: header + Visão Geral (pdf-page1)
+   - Page 2: remaining sections (pdf-page2)
+   - Header only on page 1
+   ========================= */
+async function exportTwoPagePDF(){
   const { jsPDF } = window.jspdf;
-  const page = document.getElementById('page');
 
-  // Expand all before capture to ensure content height is correct
-  [['geral-card','caret-geral'],['crc-card','caret-crc'],['iron-card','caret-iron'],['freight-card','caret-freight'],['fx-card','caret-fx']]
+  // Ensure all sections are expanded for correct canvas height on page 2
+  [['crc-card','caret-crc'],['iron-card','caret-iron'],['freight-card','caret-freight'],['fx-card','caret-fx']]
     .forEach(([id, cid])=> setExpanded(document.getElementById(id), document.getElementById(cid), true));
+  // Redraw all charts to ensure correct sizing before capture
   drawGeral(); drawCRC(); drawIron(); drawFreight(); drawFX();
   await new Promise(r=>setTimeout(r,500)); // let plots settle
 
-  const canvas = await html2canvas(page, {
+  // 1️⃣ Capture PAGE 1 (header + Visão Geral)
+  const page1El = document.getElementById('pdf-page1');
+  const canvas1 = await html2canvas(page1El, {
     scale: 2, useCORS: true,
-    windowWidth: page.scrollWidth, windowHeight: page.scrollHeight
+    windowWidth: page1El.scrollWidth, windowHeight: page1El.scrollHeight
   });
-  const img = canvas.toDataURL('image/png');
+
+  // 2️⃣ Capture PAGE 2 (remaining charts)
+  const page2El = document.getElementById('pdf-page2');
+  const canvas2 = await html2canvas(page2El, {
+    scale: 2, useCORS: true,
+    windowWidth: page2El.scrollWidth, windowHeight: page2El.scrollHeight
+  });
+
+  // 3️⃣ Build landscape A4 PDF and place each canvas centered, scaled to fit
   const pdf = new jsPDF({orientation:'landscape', unit:'mm', format:'a4'});
   const pw = pdf.internal.pageSize.getWidth();
   const ph = pdf.internal.pageSize.getHeight();
 
-  // Fit entire page on one PDF page without cropping (scaled)
-  const ratioW = pw / canvas.width;
-  const ratioH = ph / canvas.height;
-  const ratio = Math.min(ratioW, ratioH);
-  const w = canvas.width * ratio;
-  const h = canvas.height * ratio;
-  const x = (pw - w)/2;
-  const y = (ph - h)/2;
+  function addCanvasAsPage(cnv, isFirstPage=false){
+    const img = cnv.toDataURL('image/png');
+    const ratioW = pw / cnv.width;
+    const ratioH = ph / cnv.height;
+    const ratio = Math.min(ratioW, ratioH);       // scale to fit page
+    const w = cnv.width * ratio;
+    const h = cnv.height * ratio;
+    const x = (pw - w)/2;
+    const y = (ph - h)/2;
+    if(!isFirstPage) pdf.addPage('a4','landscape');
+    pdf.addImage(img, 'PNG', x, y, w, h);
+  }
 
-  pdf.addImage(img, 'PNG', x, y, w, h);
-  pdf.save('indices_moveleiro_v4_4.pdf');
+  addCanvasAsPage(canvas1, true);  // page 1 (with header)
+  addCanvasAsPage(canvas2, false); // page 2 (content only)
+
+  pdf.save('indices_moveleiro_v4_5.pdf');
 }
 
-document.getElementById('btnExportAll').addEventListener('click', exportPagePDF);
+/* Wire export button */
+document.getElementById('btnExportAll').addEventListener('click', exportTwoPagePDF);
 
-/* ===== Boot ===== */
+/* =========================
+   Boot
+   ========================= */
 (async function(){
   RAW = await loadCSV();
   initAccordion();
