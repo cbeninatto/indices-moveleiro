@@ -2,142 +2,377 @@
 <html lang="pt-br">
 <head>
 <meta charset="utf-8"/>
-<title>Índices Moveleiro — Dashboard v4.1</title>
+<title>Índices Moveleiro — Dashboard v4.2</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap');
-:root{--bg:#dfe1e1;--card:#fff;--shadow:0 3px 10px rgba(0,0,0,.08);--title-bg:#000;--title-fg:#fff;--accent:#f5b95f;}
+:root{
+  --bg:#dfe1e1; --card:#fff; --shadow:0 3px 10px rgba(0,0,0,.08);
+  --title-bg:#000; --title-fg:#fff; --accent:#f5b95f;
+}
+*{box-sizing:border-box}
 body{background:var(--bg);font-family:Inter,Arial,sans-serif;color:#111;margin:24px}
-section{margin-bottom:34px}
-.titlebar{background:var(--title-bg);color:var(--title-fg);padding:10px 16px;border-radius:6px 6px 0 0;font-weight:600}
-.card{background:var(--card);box-shadow:var(--shadow);border-radius:0 0 10px 10px;padding:16px}
-.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:12px 0 8px}
-.status{margin-left:auto;font-size:12px;color:#333;background:#fff;padding:6px 10px;border:1px solid #e5e5e5;border-radius:8px}
-input[type=date],button{padding:8px 12px;border-radius:8px;border:1px solid #e5e5e5}
-button{background:#f7f7f7;cursor:pointer}
-#chartGeral{width:100%;height:600px}
-#chartCRC,#chartIron,#chartFreight,#chartFX{width:100%;height:460px}
+section{margin-bottom:18px}
+.titlebar{
+  background:var(--title-bg); color:var(--title-fg);
+  padding:12px 16px; border-radius:6px 6px 0 0; font-weight:600; cursor:default;
+  display:flex; align-items:center; justify-content:space-between;
+}
+.titlebar.collapsible{cursor:pointer; user-select:none;}
+.card{background:var(--card);box-shadow:var(--shadow);border-radius:0 0 10px 10px;padding:14px}
+
+.rangebar{
+  display:flex; gap:8px; flex-wrap:wrap; margin: 6px 0 10px 0;
+}
+.rangebar .rbtn{
+  background:var(--accent); color:#000; border:1px solid #e5be74;
+  padding:6px 12px; border-radius:10px; font-weight:600; cursor:pointer; font-size:14px;
+}
+.rangebar .rbtn.active, .rangebar .rbtn:hover{
+  background:#000; color:#fff; border-color:#000;
+}
+
+#chartGeral{width:100%;height:560px}
+.chart{width:100%;height:420px}
+
 .badge{background:#fff;border:1px solid #e5e5e5;padding:6px 10px;border-radius:8px;font-size:12px}
-.summary-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
+.summary-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:12px}
 .year-block{background:#f8f9fb;border-left:6px solid var(--accent);padding:10px 14px;border-radius:8px;box-shadow:var(--shadow)}
 .year-title{font-weight:600;margin-bottom:6px;color:#222}
 .year-block ul{list-style:none;padding-left:0;margin:0}
 .last-month{grid-column:1/-1;margin-top:10px;color:#111;font-weight:600}
 
-/* 📱 Improved mobile layout */
-@media (max-width: 720px) {
-  body {
-    margin: 8px;
-  }
-  .controls {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  button, input[type=date] {
-    width: 100%;
-  }
-  #chartGeral { height: 400px; }
-  #chartCRC, #chartIron, #chartFreight, #chartFX { height: 320px; }
-  .summary-grid { grid-template-columns: 1fr; }
-  .year-block, .last-month { font-size: 14px; }
+/* Mobile */
+@media (max-width:720px){
+  body{margin:8px}
+  #chartGeral{height:400px}
+  .chart{height:320px}
+  .summary-grid{grid-template-columns:1fr}
+  .year-block,.last-month{font-size:14px}
 }
 </style>
 </head>
 <body>
 
+<!-- ===== MAIN (always open, not collapsible) ===== -->
 <section id="geral">
   <div class="titlebar">Índices Moveleiro</div>
   <div class="card">
-    <div class="controls">
-      <label>Data inicial:<input type="date" id="start"></label>
-      <label>Data final:<input type="date" id="end"></label>
-      <button id="apply">Aplicar filtro</button>
-      <button id="refresh">Atualizar dados 🔄</button>
-      <button id="download">Baixar CSV</button>
-      <span id="info" class="badge"></span>
-      <span id="lastUpdate" class="badge"></span>
-      <span id="status" class="status"></span>
+    <div class="rangebar" id="range-geral">
+      <button class="rbtn" data-range="3M">3M</button>
+      <button class="rbtn" data-range="6M">6M</button>
+      <button class="rbtn" data-range="1A">1A</button>
+      <button class="rbtn" data-range="5A">5A</button>
+      <button class="rbtn active" data-range="Tudo">Tudo</button>
+      <span id="lastUpdate" class="badge" style="margin-left:auto"></span>
     </div>
     <div id="chartGeral"></div>
+    <div id="summaryGeral" class="summary-grid"></div>
   </div>
 </section>
 
+<!-- ===== COLLAPSIBLE: CRC ===== -->
 <section id="crc">
-  <div class="titlebar">Aço CRC China (USD/TON)</div>
-  <div class="card">
-    <div id="chartCRC"></div>
+  <div class="titlebar collapsible" data-target="crc-card">Aço CRC China (USD/TON)</div>
+  <div id="crc-card" class="card" style="display:none">
+    <div class="rangebar" id="range-crc">
+      <button class="rbtn" data-range="3M">3M</button>
+      <button class="rbtn" data-range="6M">6M</button>
+      <button class="rbtn" data-range="1A">1A</button>
+      <button class="rbtn" data-range="5A">5A</button>
+      <button class="rbtn active" data-range="Tudo">Tudo</button>
+    </div>
+    <div id="chartCRC" class="chart"></div>
     <div id="summaryCRC" class="summary-grid"></div>
   </div>
 </section>
 
+<!-- ===== COLLAPSIBLE: IRON ===== -->
 <section id="iron">
-  <div class="titlebar">Minério de Ferro (USD/TON)</div>
-  <div class="card">
-    <div id="chartIron"></div>
+  <div class="titlebar collapsible" data-target="iron-card">Minério de Ferro (USD/TON)</div>
+  <div id="iron-card" class="card" style="display:none">
+    <div class="rangebar" id="range-iron">
+      <button class="rbtn" data-range="3M">3M</button>
+      <button class="rbtn" data-range="6M">6M</button>
+      <button class="rbtn" data-range="1A">1A</button>
+      <button class="rbtn" data-range="5A">5A</button>
+      <button class="rbtn active" data-range="Tudo">Tudo</button>
+    </div>
+    <div id="chartIron" class="chart"></div>
     <div id="summaryIron" class="summary-grid"></div>
   </div>
 </section>
 
+<!-- ===== COLLAPSIBLE: FREIGHT ===== -->
 <section id="freight">
-  <div class="titlebar">Frete Marítimo (USD/TEU)</div>
-  <div class="card">
-    <div id="chartFreight"></div>
+  <div class="titlebar collapsible" data-target="freight-card">Frete Marítimo (USD/TEU)</div>
+  <div id="freight-card" class="card" style="display:none">
+    <div class="rangebar" id="range-freight">
+      <button class="rbtn" data-range="3M">3M</button>
+      <button class="rbtn" data-range="6M">6M</button>
+      <button class="rbtn" data-range="1A">1A</button>
+      <button class="rbtn" data-range="5A">5A</button>
+      <button class="rbtn active" data-range="Tudo">Tudo</button>
+    </div>
+    <div id="chartFreight" class="chart"></div>
     <div id="summaryFreight" class="summary-grid"></div>
   </div>
 </section>
 
+<!-- ===== COLLAPSIBLE: FX ===== -->
 <section id="fx">
-  <div class="titlebar">Taxas de Câmbio (USD/BRL e USD/CNY)</div>
-  <div class="card">
-    <div id="chartFX"></div>
+  <div class="titlebar collapsible" data-target="fx-card">Taxas de Câmbio (USD/BRL e USD/CNY)</div>
+  <div id="fx-card" class="card" style="display:none">
+    <div class="rangebar" id="range-fx">
+      <button class="rbtn" data-range="3M">3M</button>
+      <button class="rbtn" data-range="6M">6M</button>
+      <button class="rbtn" data-range="1A">1A</button>
+      <button class="rbtn" data-range="5A">5A</button>
+      <button class="rbtn active" data-range="Tudo">Tudo</button>
+    </div>
+    <div id="chartFX" class="chart"></div>
     <div id="summaryFX" class="summary-grid"></div>
   </div>
 </section>
 
 <script>
+/* ===== Data loading ===== */
 const CSV_URL="data/indices_moveleiro.csv";
 let RAW=null;
 const PT_ABBR=["JAN","FEV","MAR","ABR","MAI","JUN","JUL","AGO","SET","OUT","NOV","DEZ"];
-function toNumber(v){if(v==null||v==="")return null;if(typeof v==="number")return v;const n=parseFloat(String(v).replace(",",".").trim());return Number.isFinite(n)?n:null;}
-function normalizeRow(r){return{date:r.date,crc:toNumber(r.CRC_China_USD_ton),iron:toNumber(r.Iron_Ore_USD_ton),freight:toNumber(r.Sea_Freight_USD_ton),usdbrl:toNumber(r.USD_BRL_buy),usdcny:toNumber(r.USD_CNY)};}
-function monthTicks(d){const s=new Set(),tv=[],tt=[];for(const x of d){const dt=new Date(x),k=dt.getFullYear()+"-"+(dt.getMonth()+1);if(!s.has(k)){s.add(k);tv.push(x);tt.push(PT_ABBR[dt.getMonth()]);}}return{tickvals:tv,ticktext:tt};}
-function filterData(s=null,e=null){const S=s?new Date(s):null,E=e?new Date(e):null,out={date:[],crc:[],iron:[],freight:[],usdbrl:[],usdcny:[]};for(let i=0;i<RAW.date.length;i++){const d=new Date(RAW.date[i]);if((S&&d<S)||(E&&d>E))continue;for(const k in out)if(k!=="date")out[k].push(RAW[k][i]);out.date.push(RAW.date[i]);}return out;}
-function loadCSV(){return new Promise((res,rej)=>{Papa.parse(`${CSV_URL}?v=${Date.now()}`,{download:true,header:true,complete:r=>{const rows=r.data.filter(x=>x&&x.date),n=rows.map(normalizeRow),o={date:[],crc:[],iron:[],freight:[],usdbrl:[],usdcny:[]};n.forEach(r=>{for(const k in o)o[k].push(r[k]);});res(o);},error:rej});});}
-function calcQuarterChanges(dates,vals){const yearly={};for(let i=0;i<dates.length;i++){const d=new Date(dates[i]),y=d.getFullYear(),q=Math.floor(d.getMonth()/3)+1;yearly[y]=yearly[y]||{1:[],2:[],3:[],4:[]};yearly[y][q].push(vals[i]);}const out={};for(const y in yearly){out[y]={};for(let q=1;q<=4;q++){const a=yearly[y][q];if(!a.length){out[y][q]=null;continue;}const f=a[0],l=a[a.length-1];out[y][q]=(f&&l)?((l-f)/f*100):null;}}return out;}
-function calcLastMonthLine(dates,vals){if(dates.length<2)return"";const d1=new Date(dates.at(-2)),d2=new Date(dates.at(-1)),v1=vals.at(-2),v2=vals.at(-1);if(!v1||!v2)return"";const pct=((v2-v1)/v1*100).toFixed(1);const m1=PT_ABBR[d1.getMonth()],m2=PT_ABBR[d2.getMonth()],y=d2.getFullYear();return`Último mês (${m1} – ${m2} ${y}): ${pct>0?"+":""}${pct}%`;}
-function renderSummary(id,obj,dates,vals){const el=document.getElementById(id);if(!el)return;el.innerHTML="";const yrs=Object.keys(obj).map(Number).sort((a,b)=>b-a),[y1,y2]=yrs.length>=2?[yrs[0],yrs[1]]:[yrs[0],yrs[0]],fmt=v=>v==null?"n/d":(v>=0?"+":"")+v.toFixed(1)+"%";const block=y=>{const v=obj[y]||{};return`<div class='year-block'><div class='year-title'>${y}</div><ul>${[1,2,3,4].map(q=>`<li>${q}º trimestre: ${fmt(v[q])}</li>`).join("")}</ul></div>`;};el.innerHTML=`${block(y1)}${block(y2)}<div class='last-month'>${calcLastMonthLine(dates,vals)}</div>`;}
-function drawAll(s=null,e=null){const D=filterData(s,e),{tickvals,ticktext}=monthTicks(D.date);const lineCfg=c=>({mode:"lines+markers",line:{shape:"spline",smoothing:.6,width:2.2,color:c},marker:{size:8,line:{width:1,color:"#fff"}}});const config={responsive:true};
-Plotly.newPlot("chartGeral",[
-  {x:D.date,y:D.crc,name:"Aço CRC China (USD/TON)",...lineCfg("#007bff")},
-  {x:D.date,y:D.iron,name:"Minério de Ferro (USD/TON)",...lineCfg("#ff6f00")},
-  {x:D.date,y:D.freight,name:"Frete Marítimo (USD/TEU)",...lineCfg("#00bfa6")},
-  {x:D.date,y:D.usdbrl,name:"USD/BRL",yaxis:"y2",...lineCfg("#7e57c2")},
-  {x:D.date,y:D.usdcny,name:"USD/CNY",yaxis:"y2",...lineCfg("#e53935")}
-],{hovermode:"x unified",legend:{orientation:"h",y:1.12},xaxis:{showgrid:false,tickmode:"array",tickvals,ticktext},
-yaxis:{gridcolor:"#e9ecef",zeroline:false,title:"USD/TON (CRC, Minério, Frete)"},yaxis2:{title:"Câmbio (USD/BRL, USD/CNY)",overlaying:"y",side:"right"},paper_bgcolor:"#fff",plot_bgcolor:"#fff"},config);
 
-const sub={hovermode:"x unified",xaxis:{showgrid:false,tickmode:"array",tickvals,ticktext},yaxis:{gridcolor:"#e9ecef",zeroline:false},paper_bgcolor:"#fff",plot_bgcolor:"#fff"};
-Plotly.newPlot("chartCRC",[ {x:D.date,y:D.crc,name:"Aço CRC China (USD/TON)",...lineCfg("#007bff")} ],{...sub,yaxis:{...sub.yaxis,title:"USD/TON"}},config);
-Plotly.newPlot("chartIron",[ {x:D.date,y:D.iron,name:"Minério de Ferro (USD/TON)",...lineCfg("#ff6f00")} ],{...sub,yaxis:{...sub.yaxis,title:"USD/TON"}},config);
-Plotly.newPlot("chartFreight",[ {x:D.date,y:D.freight,name:"Frete Marítimo (USD/TEU)",...lineCfg("#00bfa6")} ],{...sub,yaxis:{...sub.yaxis,title:"USD/TEU"}},config);
-const minB=Math.min(...D.usdbrl.filter(v=>v)),maxB=Math.max(...D.usdbrl.filter(v=>v)),minC=Math.min(...D.usdcny.filter(v=>v)),maxC=Math.max(...D.usdcny.filter(v=>v));
-Plotly.newPlot("chartFX",[ {x:D.date,y:D.usdbrl,name:"USD/BRL",...lineCfg("#7e57c2")},{x:D.date,y:D.usdcny,name:"USD/CNY",yaxis:"y2",...lineCfg("#e53935")} ],
-  {...sub,legend:{orientation:"h",y:1.12},yaxis:{...sub.yaxis,title:"USD/BRL",range:[minB*.98,maxB*1.02]},yaxis2:{title:"USD/CNY",overlaying:"y",side:"right",range:[minC*.98,maxC*1.02]}},config);
-
-renderSummary("summaryCRC",calcQuarterChanges(D.date,D.crc),D.date,D.crc);
-renderSummary("summaryIron",calcQuarterChanges(D.date,D.iron),D.date,D.iron);
-renderSummary("summaryFreight",calcQuarterChanges(D.date,D.freight),D.date,D.freight);
-renderSummary("summaryFX",calcQuarterChanges(D.date,D.usdbrl),D.date,D.usdbrl);
+function toNumber(v){ if(v==null||v==="")return null; if(typeof v==="number")return v;
+  const n=parseFloat(String(v).replace(",",".").trim()); return Number.isFinite(n)?n:null; }
+function normalizeRow(r){ return {
+  date:r.date, crc:toNumber(r.CRC_China_USD_ton), iron:toNumber(r.Iron_Ore_USD_ton),
+  freight:toNumber(r.Sea_Freight_USD_ton), usdbrl:toNumber(r.USD_BRL_buy), usdcny:toNumber(r.USD_CNY)
+};}
+function loadCSV(){
+  return new Promise((res,rej)=>{
+    Papa.parse(`${CSV_URL}?v=${Date.now()}`,{
+      download:true, header:true, complete:(r)=>{
+        const rows=r.data.filter(x=>x&&x.date);
+        const n=rows.map(normalizeRow);
+        const o={date:[],crc:[],iron:[],freight:[],usdbrl:[],usdcny:[]};
+        n.forEach(v=>{ o.date.push(v.date); o.crc.push(v.crc); o.iron.push(v.iron);
+          o.freight.push(v.freight); o.usdbrl.push(v.usdbrl); o.usdcny.push(v.usdcny); });
+        res(o);
+      }, error:rej
+    });
+  });
 }
-function wireUI(){document.getElementById("apply").addEventListener("click",()=>drawAll(document.getElementById("start").value||null,document.getElementById("end").value||null));
-document.getElementById("refresh").addEventListener("click",async()=>{setBusy("Atualizando…");RAW=await loadCSV();initDates();clearBusy();drawAll();});
-document.getElementById("download").addEventListener("click",()=>{const D=filterData(),csv=["date,CRC,Iron,Freight,USD/BRL,USD/CNY"];for(let i=0;i<D.date.length;i++)csv.push([D.date[i],D.crc[i],D.iron[i],D.freight[i],D.usdbrl[i],D.usdcny[i]].join(","));const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv.join("\n")],{type:"text/csv"}));a.download="indices_moveleiro_filtrado.csv";a.click();});}
-function setBusy(t){document.getElementById("status").innerText=t;}
-function clearBusy(){document.getElementById("status").innerText="";}
-function initDates(){const s=document.getElementById("start"),e=document.getElementById("end");s.min=RAW.date[0];e.max=RAW.date.at(-1);s.value=RAW.date[0];e.value=RAW.date.at(-1);}
-(async()=>{setBusy("Carregando dados…");RAW=await loadCSV();initDates();wireUI();clearBusy();drawAll();})();
+
+/* ===== Utilities ===== */
+function monthTicks(dates){
+  const seen=new Set(), tickvals=[], ticktext=[];
+  for(const x of dates){ const dt=new Date(x), key=dt.getFullYear()+"-"+(dt.getMonth()+1);
+    if(!seen.has(key)){ seen.add(key); tickvals.push(x); ticktext.push(PT_ABBR[dt.getMonth()]); } }
+  return {tickvals, ticktext};
+}
+function sliceByMonths(dates, arraysObj, months){ // months: number or null (Tudo)
+  if(months==null) return {dates:[...dates], ...Object.fromEntries(Object.keys(arraysObj).map(k=>[k,[...arraysObj[k]]]))};
+  const last=new Date(dates[dates.length-1]);
+  const from=new Date(last); from.setMonth(from.getMonth()-months);
+  const ix=dates.findIndex(d=>new Date(d)>=from);
+  const start = ix<0 ? 0 : ix;
+  const outDates = dates.slice(start);
+  const outObj = {};
+  for(const k in arraysObj) outObj[k]= arraysObj[k].slice(start);
+  return {dates:outDates, ...outObj};
+}
+function quarterChanges(dates, vals){
+  const yearly={};
+  for(let i=0;i<dates.length;i++){
+    const dt=new Date(dates[i]); const y=dt.getFullYear(); const q=Math.floor(dt.getMonth()/3)+1;
+    yearly[y]=yearly[y]||{1:[],2:[],3:[],4:[]}; yearly[y][q].push(vals[i]);
+  }
+  const out={};
+  for(const y in yearly){
+    out[y]={};
+    for(let q=1;q<=4;q++){
+      const a=yearly[y][q]; if(!a.length){ out[y][q]=null; continue; }
+      const f=a[0], l=a[a.length-1]; out[y][q]=(f&&l)?((l-f)/f*100):null;
+    }
+  }
+  return out;
+}
+function lastMonthLine(dates, vals){
+  if(dates.length<2) return "";
+  const d1=new Date(dates.at(-2)), d2=new Date(dates.at(-1));
+  const v1=vals.at(-2), v2=vals.at(-1); if(!v1||!v2) return "";
+  const pct=((v2-v1)/v1*100).toFixed(1);
+  return `Último mês (${PT_ABBR[d1.getMonth()]} – ${PT_ABBR[d2.getMonth()]} ${d2.getFullYear()}): ${pct>0?"+":""}${pct}%`;
+}
+function renderSummary(containerId, qData, dates, vals){
+  const el=document.getElementById(containerId); if(!el) return;
+  const yrs=Object.keys(qData).map(Number).sort((a,b)=>b-a);
+  const [y1,y2]=yrs.length>=2?[yrs[0],yrs[1]]:[yrs[0],yrs[0]];
+  const fmt=v=>v==null?"n/d":(v>=0?"+":"")+v.toFixed(1)+"%";
+  const block=y=>`<div class='year-block'><div class='year-title'>${y}</div><ul>${
+    [1,2,3,4].map(q=>`<li>${q}º trimestre: ${fmt((qData[y]||{})[q])}</li>`).join("")
+  }</ul></div>`;
+  el.innerHTML = `${block(y1)}${block(y2)}<div class='last-month'>${lastMonthLine(dates,vals)}</div>`;
+}
+
+/* ===== Global state for per-chart ranges ===== */
+const RANGES = {geral:"Tudo", crc:"Tudo", iron:"Tudo", freight:"Tudo", fx:"Tudo"}; // 3M,6M,1A,5A,Tudo
+const RANGE_TO_MONTHS = { "3M":3, "6M":6, "1A":12, "5A":60, "Tudo":null };
+
+/* ===== Drawers ===== */
+function lineCfg(color){ return {mode:'lines+markers', line:{shape:'spline',smoothing:.6,width:2.2,color:color}, marker:{size:8,line:{width:1,color:'#fff'}}}; }
+
+function drawGeral(){
+  const m = RANGE_TO_MONTHS[RANGES.geral];
+  const sliced = sliceByMonths(RAW.date, {crc:RAW.crc, iron:RAW.iron, freight:RAW.freight, usdbrl:RAW.usdbrl, usdcny:RAW.usdcny}, m);
+  const D = {date:sliced.dates, ...sliced};
+  const {tickvals,ticktext}=monthTicks(D.date);
+  const config={responsive:true};
+  const lastUpdate=document.getElementById('lastUpdate');
+  if(lastUpdate && RAW.date.length){
+    const dt=new Date(RAW.date.at(-1));
+    lastUpdate.textContent=`Última atualização: ${dt.toLocaleDateString('pt-BR',{day:'2-digit',month:'short',year:'numeric'})}`;
+  }
+  Plotly.newPlot('chartGeral',[
+    {x:D.date,y:D.crc,name:'Aço CRC China (USD/TON)',...lineCfg('#007bff')},
+    {x:D.date,y:D.iron,name:'Minério de Ferro (USD/TON)',...lineCfg('#ff6f00')},
+    {x:D.date,y:D.freight,name:'Frete Marítimo (USD/TEU)',...lineCfg('#00bfa6')},
+    {x:D.date,y:D.usdbrl,name:'USD/BRL',yaxis:'y2',...lineCfg('#7e57c2')},
+    {x:D.date,y:D.usdcny,name:'USD/CNY',yaxis:'y2',...lineCfg('#e53935')}
+  ],{
+    hovermode:'x unified',
+    legend:{orientation:'h',y:1.12},
+    xaxis:{showgrid:false,tickmode:'array',tickvals,ticktext},
+    yaxis:{gridcolor:'#e9ecef',zeroline:false,title:'USD/TON (CRC, Minério, Frete)'},
+    yaxis2:{title:'Câmbio (USD/BRL, USD/CNY)',overlaying:'y',side:'right'},
+    paper_bgcolor:'#fff', plot_bgcolor:'#fff'
+  }, config);
+
+  // Summaries use FULL dataset (not window)
+  renderSummary('summaryGeral', quarterChanges(RAW.date, RAW.crc), RAW.date, RAW.crc);
+}
+
+function drawCRC(){
+  const m = RANGE_TO_MONTHS[RANGES.crc];
+  const sliced = sliceByMonths(RAW.date, {crc:RAW.crc}, m);
+  const D = {date:sliced.dates, y:sliced.crc};
+  const {tickvals,ticktext}=monthTicks(D.date);
+  Plotly.newPlot('chartCRC',[
+    {x:D.date,y:D.y,name:'Aço CRC China (USD/TON)',...lineCfg('#007bff')}
+  ],{
+    hovermode:'x unified',
+    xaxis:{showgrid:false,tickmode:'array',tickvals,ticktext},
+    yaxis:{gridcolor:'#e9ecef',zeroline:false,title:'USD/TON'},
+    paper_bgcolor:'#fff', plot_bgcolor:'#fff'
+  }, {responsive:true});
+  renderSummary('summaryCRC', quarterChanges(RAW.date, RAW.crc), RAW.date, RAW.crc);
+}
+
+function drawIron(){
+  const m = RANGE_TO_MONTHS[RANGES.iron];
+  const sliced = sliceByMonths(RAW.date, {iron:RAW.iron}, m);
+  const D = {date:sliced.dates, y:sliced.iron};
+  const {tickvals,ticktext}=monthTicks(D.date);
+  Plotly.newPlot('chartIron',[
+    {x:D.date,y:D.y,name:'Minério de Ferro (USD/TON)',...lineCfg('#ff6f00')}
+  ],{
+    hovermode:'x unified',
+    xaxis:{showgrid:false,tickmode:'array',tickvals,ticktext},
+    yaxis:{gridcolor:'#e9ecef',zeroline:false,title:'USD/TON'},
+    paper_bgcolor:'#fff', plot_bgcolor:'#fff'
+  }, {responsive:true});
+  renderSummary('summaryIron', quarterChanges(RAW.date, RAW.iron), RAW.date, RAW.iron);
+}
+
+function drawFreight(){
+  const m = RANGE_TO_MONTHS[RANGES.freight];
+  const sliced = sliceByMonths(RAW.date, {freight:RAW.freight}, m);
+  const D = {date:sliced.dates, y:sliced.freight};
+  const {tickvals,ticktext}=monthTicks(D.date);
+  Plotly.newPlot('chartFreight',[
+    {x:D.date,y:D.y,name:'Frete Marítimo (USD/TEU)',...lineCfg('#00bfa6')}
+  ],{
+    hovermode:'x unified',
+    xaxis:{showgrid:false,tickmode:'array',tickvals,ticktext},
+    yaxis:{gridcolor:'#e9ecef',zeroline:false,title:'USD/TEU'},
+    paper_bgcolor:'#fff', plot_bgcolor:'#fff'
+  }, {responsive:true});
+  renderSummary('summaryFreight', quarterChanges(RAW.date, RAW.freight), RAW.date, RAW.freight);
+}
+
+function drawFX(){
+  const m = RANGE_TO_MONTHS[RANGES.fx];
+  const sliced = sliceByMonths(RAW.date, {usdbrl:RAW.usdbrl, usdcny:RAW.usdcny}, m);
+  const D = {date:sliced.dates, usdbrl:sliced.usdbrl, usdcny:sliced.usdcny};
+  const {tickvals,ticktext}=monthTicks(D.date);
+  const minB=Math.min(...D.usdbrl.filter(v=>v!=null)), maxB=Math.max(...D.usdbrl.filter(v=>v!=null));
+  const minC=Math.min(...D.usdcny.filter(v=>v!=null)), maxC=Math.max(...D.usdcny.filter(v=>v!=null));
+  Plotly.newPlot('chartFX',[
+    {x:D.date,y:D.usdbrl,name:'USD/BRL',...lineCfg('#7e57c2')},
+    {x:D.date,y:D.usdcny,name:'USD/CNY',yaxis:'y2',...lineCfg('#e53935')}
+  ],{
+    hovermode:'x unified',
+    legend:{orientation:'h',y:1.12},
+    xaxis:{showgrid:false,tickmode:'array',tickvals,ticktext},
+    yaxis:{gridcolor:'#e9ecef',zeroline:false,title:'USD/BRL',range:[minB*0.98, maxB*1.02]},
+    yaxis2:{title:'USD/CNY',overlaying:'y',side:'right',range:[minC*0.98, maxC*1.02]},
+    paper_bgcolor:'#fff', plot_bgcolor:'#fff'
+  }, {responsive:true});
+  renderSummary('summaryFX', quarterChanges(RAW.date, RAW.usdbrl), RAW.date, RAW.usdbrl);
+}
+
+/* ===== UI wiring ===== */
+function initAccordion(){
+  document.querySelectorAll('.titlebar.collapsible').forEach(tb=>{
+    tb.addEventListener('click', ()=>{
+      const id = tb.getAttribute('data-target');
+      const card = document.getElementById(id);
+      card.style.display = (card.style.display==='none'||!card.style.display)? 'block':'none';
+      // re-render visible chart to ensure proper sizing
+      if(id==='crc-card') drawCRC();
+      if(id==='iron-card') drawIron();
+      if(id==='freight-card') drawFreight();
+      if(id==='fx-card') drawFX();
+    });
+  });
+}
+
+function setRangeActive(rangeBarId, key){
+  const bar=document.getElementById(rangeBarId);
+  bar.querySelectorAll('.rbtn').forEach(b=>b.classList.toggle('active', b.dataset.range===key));
+}
+function initRanges(){
+  const map = [
+    ['range-geral','geral',drawGeral],
+    ['range-crc','crc',drawCRC],
+    ['range-iron','iron',drawIron],
+    ['range-freight','freight',drawFreight],
+    ['range-fx','fx',drawFX],
+  ];
+  map.forEach(([rid, key, drawer])=>{
+    document.getElementById(rid).addEventListener('click', (e)=>{
+      const btn = e.target.closest('.rbtn'); if(!btn) return;
+      const sel = btn.dataset.range;
+      RANGES[key] = sel; setRangeActive(rid, sel); drawer();
+    });
+  });
+}
+
+/* ===== Boot ===== */
+(async function(){
+  RAW = await loadCSV();
+  initAccordion();
+  initRanges();
+
+  // Initial draws
+  setRangeActive('range-geral', RANGES.geral); drawGeral();
+  // collapsed sections will draw on first open; still draw once for server-side caching feel:
+  setRangeActive('range-crc', RANGES.crc); drawCRC();
+  setRangeActive('range-iron', RANGES.iron); drawIron();
+  setRangeActive('range-freight', RANGES.freight); drawFreight();
+  setRangeActive('range-fx', RANGES.fx); drawFX();
+})();
 </script>
 </body>
 </html>
