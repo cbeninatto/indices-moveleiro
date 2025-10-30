@@ -159,13 +159,58 @@ function drawAll(s=null,e=null){
   const {tickvals,ticktext}=monthTicks(D.date);
   const lineCfg=(c)=>({mode:'lines+markers',line:{shape:'spline',smoothing:0.6,width:2.2,color:c},marker:{size:8,line:{width:1,color:'#fff'}}});
   // === Geral ===
-  Plotly.newPlot('chartGeral',[
-    {x:D.date,y:D.crc,name:'Aço CRC China (USD/TON)',...lineCfg('#007bff')},
-    {x:D.date,y:D.iron,name:'Minério de Ferro (USD/TON)',...lineCfg('#ff6f00')},
-    {x:D.date,y:D.freight,name:'Frete Marítimo (USD/TEU)',...lineCfg('#00bfa6')},
-    {x:D.date,y:D.usdbrl?.map(v=>v?v*100:v),name:'USD/BRL ×100',yaxis:'y2',...lineCfg('#7e57c2')},
-    {x:D.date,y:D.usdcny?.map(v=>v?v*100:v),name:'USD/CNY ×100',yaxis:'y2',...lineCfg('#e53935')}
-  ],{
+// ===== Main Chart: Índices Moveleiro =====
+Plotly.newPlot('chartGeral', [
+  // --- Industrial indices ---
+  { x: D.date, y: D.crc, name: 'Aço CRC China (USD/TON)', ...lineCfg('#007bff') },
+  { x: D.date, y: D.iron, name: 'Minério de Ferro (USD/TON)', ...lineCfg('#ff6f00') },
+  { x: D.date, y: D.freight, name: 'Frete Marítimo (USD/TEU)', ...lineCfg('#00bfa6') },
+
+  // --- Exchange rates (now solid lines) ---
+  {
+    x: D.date,
+    y: D.usdbrl,
+    name: 'USD/BRL',
+    yaxis: 'y2',
+    ...lineCfg('#7e57c2'),
+    line: { shape: 'spline', smoothing: 0.6, width: 2.2, color: '#7e57c2' },
+    marker: { size: 7, line: { width: 1, color: '#fff' } }
+  },
+  {
+    x: D.date,
+    y: D.usdcny,
+    name: 'USD/CNY',
+    yaxis: 'y2',
+    ...lineCfg('#e53935'),
+    line: { shape: 'spline', smoothing: 0.6, width: 2.2, color: '#e53935' },
+    marker: { size: 7, line: { width: 1, color: '#fff' } }
+  }
+], {
+  hovermode: 'x unified',
+  legend: { orientation: 'h', y: 1.12 },
+  xaxis: {
+    showgrid: false,
+    tickmode: 'array',
+    tickvals: tickvals,
+    ticktext: ticktext
+  },
+  yaxis: {
+    gridcolor: '#e9ecef',
+    zeroline: false,
+    title: 'USD/TON (CRC, Minério, Frete)',
+    side: 'left'
+  },
+  yaxis2: {
+    title: 'Câmbio (USD/BRL, USD/CNY)',
+    overlaying: 'y',
+    side: 'right',
+    showgrid: false
+  },
+  paper_bgcolor: '#ffffff',
+  plot_bgcolor: '#ffffff',
+  transition: { duration: 300, easing: 'cubic-in-out' }
+});
+
     hovermode:'x unified',
     legend:{orientation:'h',y:1.12},
     xaxis:{showgrid:false,tickmode:'array',tickvals,ticktext},
