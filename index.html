@@ -2,7 +2,7 @@
 <html lang="pt-br">
 <head>
 <meta charset="utf-8"/>
-<title>Índices Moveleiro — Dashboard v4.9</title>
+<title>Índices Moveleiro — Modern Dashboard v4.9.1</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 
 <!-- Plotly & PapaParse -->
@@ -66,14 +66,14 @@ section{margin-bottom:18px}
 }
 .rbtn.active, .rbtn:hover{background:#000;color:#fff;border-color:#000}
 
-/* v4.8: variation pill styled like buttons, full width on mobile */
+/* Variation pill styled like buttons, full width on mobile */
 .varline{ width:100%; display:flex; justify-content:flex-start; margin-top:6px; }
 .varpill{
   background:var(--accent); color:#000; border:1px solid var(--accent-border);
   padding:6px 12px; border-radius:10px; font-weight:600; font-size:14px;
 }
 
-/* Charts: desktop 480px, mobile 460px */
+/* Charts */
 #chartGeral{width:100%;height:480px}
 .chart{width:100%;height:480px}
 
@@ -84,7 +84,7 @@ section{margin-bottom:18px}
 .year-block ul{list-style:none;padding-left:0;margin:0}
 .year-block li{margin:2px 0}
 
-/* v4.8: 4-column FX grid */
+/* 4-column FX grid */
 .summary-grid.fx{
   display:grid; gap:16px; margin-top:12px;
   grid-template-columns: repeat(4, 1fr);
@@ -113,9 +113,10 @@ section{margin-bottom:18px}
 <body>
 
 <div class="header">
-  <div class="title">Índices Moveleiro <span style="opacity:.7">v4.9</span></div>
+  <div class="title">Índices Moveleiro</div>
   <div class="meta" id="lastUpdateHeader">Última atualização: —</div>
   <div class="spacer"></div>
+  <!-- Placeholder (inactive) -->
   <button class="btn" id="btnExportAll">Exportar PDF</button>
 </div>
 
@@ -133,7 +134,7 @@ section{margin-bottom:18px}
         <button class="rbtn" data-range="5A">5A</button>
         <button class="rbtn active" data-range="Tudo">Tudo</button>
       </div>
-      <!-- (Visão Geral variation pill intentionally hidden) -->
+      <!-- Variation pill intentionally hidden for overview -->
       <div class="varline" id="varline-geral" style="display:none;">
         <div class="varpill" id="varpill-geral"></div>
       </div>
@@ -235,7 +236,8 @@ function normalizeRow(r){ return {
   freight:toNumber(r.Sea_Freight_USD_ton), usdbrl:toNumber(r.USD_BRL_buy), usdcny:toNumber(r.USD_CNY)
 };}
 
-/* v4.9 NEW: reduce Sea Freight to one entry per month (keeps the latest date) */
+/* v4.9: Reduce Sea Freight to one entry per month (keeps latest date)
+   v4.9.1 comment: used for freight charts AND overview to align endpoints */
 function monthlyReduceFreight(dates, values){
   const map = new Map(); // key = YYYY-M, value = {date, value}
   for(let i=0;i<dates.length;i++){
@@ -244,7 +246,6 @@ function monthlyReduceFreight(dates, values){
     map.set(key, {date: dates[i], value: values[i]}); // overwrite → latest wins
   }
   const reduced = Array.from(map.values());
-  // Ensure chronological order in case CSV isn't strictly sorted
   reduced.sort((a,b)=> new Date(a.date) - new Date(b.date));
   return {dates: reduced.map(v=>v.date), values: reduced.map(v=>v.value)};
 }
@@ -259,7 +260,7 @@ function loadCSV(){
         n.forEach(v=>{ o.date.push(v.date); o.crc.push(v.crc); o.iron.push(v.iron);
           o.freight_raw.push(v.freight); o.usdbrl.push(v.usdbrl); o.usdcny.push(v.usdcny); });
 
-        /* v4.9 NEW: build monthly-reduced freight arrays */
+        /* v4.9.1: build reduced monthly freight arrays for consistent plotting & metrics */
         const reduced = monthlyReduceFreight(o.date, o.freight_raw);
         o.freight_dates = reduced.dates;       // monthly timestamps for freight
         o.freight = reduced.values;            // monthly values for freight
@@ -312,6 +313,26 @@ function quarterChanges(dates, vals){
   return out;
 }
 
+/* v4.9.1: monthEndSeries() → collapses any series to last entry per month (MoM comparisons) */
+function monthEndSeries(dates, values){
+  const map = new Map();
+  for(let i=0;i<dates.length;i++){
+    const d = new Date(dates[i]);
+    const key = `${d.getFullYear()}-${d.getMonth()+1}`;
+    map.set(key, {date: dates[i], value: values[i]}); // last seen in month
+  }
+  const arr = Array.from(map.values()).sort((a,b)=> new Date(a.date) - new Date(b.date));
+  return { dates: arr.map(x=>x.date), values: arr.map(x=>x.value) };
+}
+
+/* v4.9.1: helper to format "SET – OUT 2025" */
+function formatMoMLabel(d1, d2){
+  const m1 = PT_ABBR[d1.getMonth()];
+  const m2 = PT_ABBR[d2.getMonth()];
+  const y2 = d2.getFullYear();
+  return `${m1} – ${m2} ${y2}`;
+}
+
 /* Analytics for variation line */
 function metricsForSeries(dates, series, months){
   const sliced = sliceByMonths(dates, {y:series}, months);
@@ -331,23 +352,29 @@ function metricsForSeries(dates, series, months){
 }
 const pct = v => v==null ? "—" : ((v>=0?"+":"")+v.toFixed(1).replace(".",",")+" %");
 
-/* LAST-MONTH lines */
+/* v4.9.1: Accurate last-month (MoM) using month-end values */
 function lastMonthLine(dates, vals){
-  if(dates.length<2) return "";
-  const d1=new Date(dates.at(-2)), d2=new Date(dates.at(-1));
-  const v1=vals.at(-2), v2=vals.at(-1); if(v1==null||v2==null) return "";
-  const p=((v2-v1)/v1*100);
-  return `Último mês (${PT_ABBR[d1.getMonth()]} – ${PT_ABBR[d2.getMonth()]} ${d2.getFullYear()}): ${pct(p)}`;
+  const reduced = monthEndSeries(dates, vals);
+  const R = reduced.values.filter(v => v != null);
+  if(R.length < 2) return "";
+  const d1 = new Date(reduced.dates[reduced.dates.length-2]);
+  const d2 = new Date(reduced.dates[reduced.dates.length-1]);
+  const v1 = R[R.length-2], v2 = R[R.length-1];
+  const p = ((v2 - v1) / v1 * 100);
+  return `Último mês (${formatMoMLabel(d1, d2)}): ${pct(p)}`;
 }
-function lastMonthLineFX(dates, v){
-  if(dates.length<2) return "";
-  const d1=new Date(dates.at(-2)), d2=new Date(dates.at(-1));
-  const a=v.at(-2), b=v.at(-1); if(a==null||b==null) return "";
-  const p=((b-a)/a*100);
-  return `Último mês (${PT_ABBR[d1.getMonth()]} – ${PT_ABBR[d2.getMonth()]} ${d2.getFullYear()}): ${pct(p)}`;
+function lastMonthLineFX(dates, vals){
+  const reduced = monthEndSeries(dates, vals);
+  const R = reduced.values.filter(v => v != null);
+  if(R.length < 2) return "";
+  const d1 = new Date(reduced.dates[reduced.dates.length-2]);
+  const d2 = new Date(reduced.dates[reduced.dates.length-1]);
+  const v1 = R[R.length-2], v2 = R[R.length-1];
+  const p = ((v2 - v1) / v1 * 100);
+  return `Último mês (${formatMoMLabel(d1, d2)}): ${pct(p)}`;
 }
 
-/* Render non-FX summaries (2 columns: latest year | prev year) */
+/* Render non-FX summaries (2 columns: latest year | previous year) */
 function renderSummary(containerId, qData, dates, vals){
   const el=document.getElementById(containerId); if(!el) return;
   const yrs=Object.keys(qData).map(Number).sort((a,b)=>b-a);
@@ -413,21 +440,40 @@ function axisLayout(baseTitle, xticks){
 /* Drawers */
 function drawGeral(){
   const m = RANGE_TO_MONTHS[RANGES.geral];
-  const sliced = sliceByMonths(RAW.date, {crc:RAW.crc, iron:RAW.iron, freight:RAW.freight, usdbrl:RAW.usdbrl, usdcny:RAW.usdcny}, m);
-  const D = {date:sliced.dates, ...sliced};
+
+  /* v4.9.1: drawGeral() now uses reduced monthly Freight series to avoid early cutoff */
+  const sliced = sliceByMonths(
+    RAW.date,
+    {crc: RAW.crc, iron: RAW.iron, usdbrl: RAW.usdbrl, usdcny: RAW.usdcny},
+    m
+  );
+  const slicedFreight = sliceByMonths(RAW.freight_dates, {freight: RAW.freight}, m);
+
+  const D = {
+    date: sliced.dates,
+    crc: sliced.crc,
+    iron: sliced.iron,
+    usdbrl: sliced.usdbrl,
+    usdcny: sliced.usdcny,
+    freight_dates: slicedFreight.dates,
+    freight: slicedFreight.freight
+  };
+
   const {tickvals,ticktext}=evenMonthTicksWithYear(D.date);
+
   if (RAW.date.length){
     const dt=new Date(RAW.date.at(-1));
     const txt=`Última atualização: ${dt.toLocaleDateString('pt-BR',{day:'2-digit',month:'short',year:'numeric'})}`;
     const lastHeader=document.getElementById('lastUpdateHeader');
     if (lastHeader) lastHeader.textContent = txt;
   }
+
   Plotly.newPlot('chartGeral',[
-    {x:D.date,y:D.crc,name:'Aço CRC China (USD/TON)',...lineCfg('#007bff')},
-    {x:D.date,y:D.iron,name:'Minério de Ferro (USD/TON)',...lineCfg('#ff6f00')},
-    {x:D.date,y:D.freight,name:'Frete Marítimo (USD/TEU)',...lineCfg('#00bfa6')},
-    {x:D.date,y:D.usdbrl,name:'USD/BRL',yaxis:'y2',...lineCfg('#7e57c2')},
-    {x:D.date,y:D.usdcny,name:'USD/CNY',yaxis:'y2',...lineCfg('#e53935')}
+    {x:D.date, y:D.crc, name:'Aço CRC China (USD/TON)', ...lineCfg('#007bff')},
+    {x:D.date, y:D.iron, name:'Minério de Ferro (USD/TON)', ...lineCfg('#ff6f00')},
+    {x:D.freight_dates, y:D.freight, name:'Frete Marítimo (USD/TEU)', ...lineCfg('#00bfa6')}, /* v4.9.1 */
+    {x:D.date, y:D.usdbrl, name:'USD/BRL', yaxis:'y2', ...lineCfg('#7e57c2')},
+    {x:D.date, y:D.usdcny, name:'USD/CNY', yaxis:'y2', ...lineCfg('#e53935')}
   ],{
     ...axisLayout('USD/TON (CRC, Minério, Frete)', {tickvals, ticktext}),
     yaxis2:{title:'Câmbio (USD/BRL, USD/CNY)', overlaying:'y', side:'right', tickfont:{size:isMobile()?10:12}, automargin:true}
@@ -467,7 +513,7 @@ function drawIron(){
 function drawFreight(){
   const months = RANGE_TO_MONTHS[RANGES.freight];
 
-  /* v4.9 NEW: use monthly-reduced freight dates/values for everything */
+  /* v4.9.1: use monthly-reduced freight arrays everywhere (chart, summaries, metrics) */
   const sliced = sliceByMonths(RAW.freight_dates, {freight:RAW.freight}, months);
   const D = {date:sliced.dates, y:sliced.freight};
 
@@ -476,11 +522,9 @@ function drawFreight(){
     {x:D.date,y:D.y,name:'Frete Marítimo (USD/TEU)',...lineCfg('#00bfa6')}
   ], axisLayout('USD/TEU', {tickvals, ticktext}), {responsive:true});
 
-  // Quarterly summary & last-month based on reduced monthly freight series
   const qFreight = quarterChanges(RAW.freight_dates, RAW.freight);
   renderSummary('summaryFreight', qFreight, RAW.freight_dates, RAW.freight);
 
-  // Variation pill based on reduced monthly freight series
   const m = metricsForSeries(RAW.freight_dates, RAW.freight, months);
   document.getElementById('varpill-freight').textContent =
     `Variação total: ${pct(m.total)} | Média mensal: ${pct(m.avg)} | Volatilidade: ${pct(m.vol)}`;
