@@ -2,14 +2,11 @@
 <html lang="pt-br">
 <head>
 <meta charset="utf-8"/>
-<title>Índices Moveleiro — Dashboard v4.5</title>
+<title>Índices Moveleiro — Dashboard v4.6</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 
-<!-- Core libs (CDNs) -->
 <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap');
@@ -57,20 +54,24 @@ section{margin-bottom:18px}
   background:var(--card);box-shadow:var(--shadow);border-radius:0 0 10px 10px;padding:14px;
 }
 
-/* Range buttons */
-.rangebar{display:flex; gap:8px; flex-wrap:wrap; margin: 6px 0 10px}
+/* Range + info row */
+.rangebar{
+  display:flex; gap:8px; flex-wrap:wrap; align-items:center;
+  margin: 6px 0 10px
+}
 .rbtn{
   background:var(--accent); color:#000; border:1px solid var(--accent-border);
   padding:6px 12px; border-radius:10px; font-weight:600; cursor:pointer; font-size:14px;
 }
 .rbtn.active, .rbtn:hover{background:#000;color:#fff;border-color:#000}
+.info-right{margin-left:auto; display:flex; gap:12px; align-items:center}
+.info-text{font-size:12px; color:#111}
 
-/* Charts (restored heights) */
-#chartGeral{width:100%;height:600px}
-.chart{width:100%;height:600px}
+/* Charts: desktop 480px, mobile 460px */
+#chartGeral{width:100%;height:480px}
+.chart{width:100%;height:480px}
 
-/* Summaries */
-.badge{background:#fff;border:1px solid #e5e5e5;padding:6px 10px;border-radius:8px;font-size:12px}
+/* Summaries for non-Geral sections */
 .summary-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:12px}
 .year-block{background:#f8f9fb;border-left:6px solid var(--accent);padding:10px 14px;border-radius:8px;box-shadow:var(--shadow)}
 .year-title{font-weight:600;margin-bottom:6px;color:#222}
@@ -86,136 +87,133 @@ section{margin-bottom:18px}
   .year-block,.last-month{font-size:13px}
   .header{flex-wrap:wrap; gap:8px}
 }
-
-/* Print baseline (in case of native print) */
-@media print { body { background:#fff; margin:0 } }
 </style>
 </head>
 <body>
 
-<!-- ===== PDF PAGE 1 WRAPPER: header + Visão Geral ===== -->
-<div id="pdf-page1">
-  <!-- Header (non-sticky) -->
-  <div class="header">
-    <div class="title">Índices Moveleiro <span style="opacity:.7">v4.5</span></div>
-    <div class="meta" id="lastUpdateHeader">Última atualização: —</div>
-    <div class="spacer"></div>
-    <button class="btn" id="btnExportAll">Exportar PDF</button>
+<div class="header">
+  <div class="title">Índices Moveleiro <span style="opacity:.7">v4.6</span></div>
+  <div class="meta" id="lastUpdateHeader">Última atualização: —</div>
+  <div class="spacer"></div>
+  <button class="btn" id="btnExportAll">Exportar PDF</button>
+</div>
+
+<section id="geral">
+  <div class="titlebar collapsible" data-target="geral-card">
+    <span>Visão Geral</span>
+    <span class="caret" id="caret-geral">▼</span>
   </div>
-
-  <!-- Visão Geral (collapsible, starts open) -->
-  <section id="geral">
-    <div class="titlebar collapsible" data-target="geral-card">
-      <span>Visão Geral</span>
-      <span class="caret" id="caret-geral">▼</span>
-    </div>
-    <div id="geral-card" class="card-wrap" style="max-height: 2000px;">
-      <div class="card">
-        <div class="rangebar" id="range-geral">
-          <button class="rbtn" data-range="3M">3M</button>
-          <button class="rbtn" data-range="6M">6M</button>
-          <button class="rbtn" data-range="1A">1A</button>
-          <button class="rbtn" data-range="5A">5A</button>
-          <button class="rbtn active" data-range="Tudo">Tudo</button>
-          <span id="lastUpdate" class="badge" style="margin-left:auto"></span>
+  <div id="geral-card" class="card-wrap" style="max-height: 2000px;">
+    <div class="card">
+      <div class="rangebar" id="range-geral">
+        <button class="rbtn" data-range="3M">3M</button>
+        <button class="rbtn" data-range="6M">6M</button>
+        <button class="rbtn" data-range="1A">1A</button>
+        <button class="rbtn" data-range="5A">5A</button>
+        <button class="rbtn active" data-range="Tudo">Tudo</button>
+        <div class="info-right">
+          <span id="lastUpdate" class="info-text"></span>
         </div>
-        <div id="chartGeral"></div>
-        <div id="summaryGeral" class="summary-grid"></div>
       </div>
+      <div id="chartGeral"></div>
+      <!-- No summaries under Visão Geral -->
     </div>
-  </section>
-</div>
+  </div>
+</section>
 
-<!-- ===== PDF PAGE 2 WRAPPER: remaining sections only ===== -->
-<div id="pdf-page2">
-  <!-- CRC -->
-  <section id="crc">
-    <div class="titlebar collapsible" data-target="crc-card">
-      <span>Aço CRC China (USD/TON)</span><span class="caret" id="caret-crc">▶</span>
-    </div>
-    <div id="crc-card" class="card-wrap" style="max-height:0">
-      <div class="card">
-        <div class="rangebar" id="range-crc">
-          <button class="rbtn" data-range="3M">3M</button>
-          <button class="rbtn" data-range="6M">6M</button>
-          <button class="rbtn" data-range="1A">1A</button>
-          <button class="rbtn" data-range="5A">5A</button>
-          <button class="rbtn active" data-range="Tudo">Tudo</button>
+<section id="crc">
+  <div class="titlebar collapsible" data-target="crc-card">
+    <span>Aço CRC China (USD/TON)</span><span class="caret" id="caret-crc">▶</span>
+  </div>
+  <div id="crc-card" class="card-wrap" style="max-height:0">
+    <div class="card">
+      <div class="rangebar" id="range-crc">
+        <button class="rbtn" data-range="3M">3M</button>
+        <button class="rbtn" data-range="6M">6M</button>
+        <button class="rbtn" data-range="1A">1A</button>
+        <button class="rbtn" data-range="5A">5A</button>
+        <button class="rbtn active" data-range="Tudo">Tudo</button>
+        <div class="info-right">
+          <span id="var-crc" class="info-text">Variação: —</span>
         </div>
-        <div id="chartCRC" class="chart"></div>
-        <div id="summaryCRC" class="summary-grid"></div>
       </div>
+      <div id="chartCRC" class="chart"></div>
+      <div id="summaryCRC" class="summary-grid"></div>
     </div>
-  </section>
+  </div>
+</section>
 
-  <!-- Iron -->
-  <section id="iron">
-    <div class="titlebar collapsible" data-target="iron-card">
-      <span>Minério de Ferro (USD/TON)</span><span class="caret" id="caret-iron">▶</span>
-    </div>
-    <div id="iron-card" class="card-wrap" style="max-height:0">
-      <div class="card">
-        <div class="rangebar" id="range-iron">
-          <button class="rbtn" data-range="3M">3M</button>
-          <button class="rbtn" data-range="6M">6M</button>
-          <button class="rbtn" data-range="1A">1A</button>
-          <button class="rbtn" data-range="5A">5A</button>
-          <button class="rbtn active" data-range="Tudo">Tudo</button>
+<section id="iron">
+  <div class="titlebar collapsible" data-target="iron-card">
+    <span>Minério de Ferro (USD/TON)</span><span class="caret" id="caret-iron">▶</span>
+  </div>
+  <div id="iron-card" class="card-wrap" style="max-height:0">
+    <div class="card">
+      <div class="rangebar" id="range-iron">
+        <button class="rbtn" data-range="3M">3M</button>
+        <button class="rbtn" data-range="6M">6M</button>
+        <button class="rbtn" data-range="1A">1A</button>
+        <button class="rbtn" data-range="5A">5A</button>
+        <button class="rbtn active" data-range="Tudo">Tudo</button>
+        <div class="info-right">
+          <span id="var-iron" class="info-text">Variação: —</span>
         </div>
-        <div id="chartIron" class="chart"></div>
-        <div id="summaryIron" class="summary-grid"></div>
       </div>
+      <div id="chartIron" class="chart"></div>
+      <div id="summaryIron" class="summary-grid"></div>
     </div>
-  </section>
+  </div>
+</section>
 
-  <!-- Freight -->
-  <section id="freight">
-    <div class="titlebar collapsible" data-target="freight-card">
-      <span>Frete Marítimo (USD/TEU)</span><span class="caret" id="caret-freight">▶</span>
-    </div>
-    <div id="freight-card" class="card-wrap" style="max-height:0">
-      <div class="card">
-        <div class="rangebar" id="range-freight">
-          <button class="rbtn" data-range="3M">3M</button>
-          <button class="rbtn" data-range="6M">6M</button>
-          <button class="rbtn" data-range="1A">1A</button>
-          <button class="rbtn" data-range="5A">5A</button>
-          <button class="rbtn active" data-range="Tudo">Tudo</button>
+<section id="freight">
+  <div class="titlebar collapsible" data-target="freight-card">
+    <span>Frete Marítimo (USD/TEU)</span><span class="caret" id="caret-freight">▶</span>
+  </div>
+  <div id="freight-card" class="card-wrap" style="max-height:0">
+    <div class="card">
+      <div class="rangebar" id="range-freight">
+        <button class="rbtn" data-range="3M">3M</button>
+        <button class="rbtn" data-range="6M">6M</button>
+        <button class="rbtn" data-range="1A">1A</button>
+        <button class="rbtn" data-range="5A">5A</button>
+        <button class="rbtn active" data-range="Tudo">Tudo</button>
+        <div class="info-right">
+          <span id="var-freight" class="info-text">Variação: —</span>
         </div>
-        <div id="chartFreight" class="chart"></div>
-        <div id="summaryFreight" class="summary-grid"></div>
       </div>
+      <div id="chartFreight" class="chart"></div>
+      <div id="summaryFreight" class="summary-grid"></div>
     </div>
-  </section>
+  </div>
+</section>
 
-  <!-- FX -->
-  <section id="fx">
-    <div class="titlebar collapsible" data-target="fx-card">
-      <span>Taxas de Câmbio (USD/BRL e USD/CNY)</span><span class="caret" id="caret-fx">▶</span>
-    </div>
-    <div id="fx-card" class="card-wrap" style="max-height:0">
-      <div class="card">
-        <div class="rangebar" id="range-fx">
-          <button class="rbtn" data-range="3M">3M</button>
-          <button class="rbtn" data-range="6M">6M</button>
-          <button class="rbtn" data-range="1A">1A</button>
-          <button class="rbtn" data-range="5A">5A</button>
-          <button class="rbtn active" data-range="Tudo">Tudo</button>
+<section id="fx">
+  <div class="titlebar collapsible" data-target="fx-card">
+    <span>Taxas de Câmbio (USD/BRL e USD/CNY)</span><span class="caret" id="caret-fx">▶</span>
+  </div>
+  <div id="fx-card" class="card-wrap" style="max-height:0">
+    <div class="card">
+      <div class="rangebar" id="range-fx">
+        <button class="rbtn" data-range="3M">3M</button>
+        <button class="rbtn" data-range="6M">6M</button>
+        <button class="rbtn" data-range="1A">1A</button>
+        <button class="rbtn" data-range="5A">5A</button>
+        <button class="rbtn active" data-range="Tudo">Tudo</button>
+        <div class="info-right">
+          <span id="var-fx" class="info-text">Variação: —</span>
         </div>
-        <div id="chartFX" class="chart"></div>
-        <div id="summaryFX" class="summary-grid"></div>
       </div>
+      <div id="chartFX" class="chart"></div>
+      <div id="summaryFX" class="summary-grid"></div>
     </div>
-  </section>
-</div>
+  </div>
+</section>
 
 <script>
-/* =========================
-   Data loading & utilities
-   ========================= */
 const CSV_URL="data/indices_moveleiro.csv";
 let RAW=null;
 const PT_ABBR=["JAN","FEV","MAR","ABR","MAI","JUN","JUL","AGO","SET","OUT","NOV","DEZ"];
+const isMobile = () => window.innerWidth < 720;
 
 function toNumber(v){ if(v==null||v==="")return null; if(typeof v==="number")return v;
   const n=parseFloat(String(v).replace(",",".").trim()); return Number.isFinite(n)?n:null; }
@@ -238,23 +236,16 @@ function loadCSV(){
   });
 }
 
-/* Alternate month ticks: show only even months (FEV, ABR, JUN, AGO, OUT, DEZ) */
-function evenMonthTicks(dates){
+function evenMonthTicksWithYear(dates){
   const seen=new Set(), tickvals=[], ticktext=[];
   for(const iso of dates){
-    const dt=new Date(iso);
-    const month = dt.getMonth()+1; // 1..12
-    const key = dt.getFullYear()+"-"+month;
-    if(month % 2 === 0 && !seen.has(key)){ // only even months
-      seen.add(key);
-      tickvals.push(iso);
-      ticktext.push(PT_ABBR[dt.getMonth()]);
-    }
+    const dt=new Date(iso); const m=dt.getMonth()+1; const y=String(dt.getFullYear()).slice(-2);
+    const key = dt.getFullYear()+"-"+m;
+    if(m%2===0 && !seen.has(key)){ seen.add(key); tickvals.push(iso); ticktext.push(PT_ABBR[dt.getMonth()]+" "+y); }
   }
   return {tickvals, ticktext};
 }
 
-/* Slice by months helper (null means full range) */
 function sliceByMonths(dates, arraysObj, months){
   if(months==null) return {dates:[...dates], ...Object.fromEntries(Object.keys(arraysObj).map(k=>[k,[...arraysObj[k]]]))};
   const last=new Date(dates[dates.length-1]);
@@ -267,7 +258,6 @@ function sliceByMonths(dates, arraysObj, months){
   return {dates:outDates, ...outObj};
 }
 
-/* Quarterly changes + last-month line (unchanged) */
 function quarterChanges(dates, vals){
   const yearly={};
   for(let i=0;i<dates.length;i++){
@@ -288,32 +278,36 @@ function lastMonthLine(dates, vals){
   if(dates.length<2) return "";
   const d1=new Date(dates.at(-2)), d2=new Date(dates.at(-1));
   const v1=vals.at(-2), v2=vals.at(-1); if(!v1||!v2) return "";
-  const pct=((v2-v1)/v1*100).toFixed(1);
-  return `Último mês (${PT_ABBR[d1.getMonth()]} – ${PT_ABBR[d2.getMonth()]} ${d2.getFullYear()}): ${pct>0?"+":""}${pct}%`;
+  const pct=((v2-v1)/v1*100);
+  const txt=(pct>=0?"+":"")+pct.toFixed(1).replace(".",",")+" %";
+  return `Último mês (${PT_ABBR[d1.getMonth()]} – ${PT_ABBR[d2.getMonth()]} ${d2.getFullYear()}): ${txt}`;
 }
 function renderSummary(containerId, qData, dates, vals){
   const el=document.getElementById(containerId); if(!el) return;
   const yrs=Object.keys(qData).map(Number).sort((a,b)=>b-a);
   const [y1,y2]=yrs.length>=2?[yrs[0],yrs[1]]:[yrs[0],yrs[0]];
-  const fmt=v=>v==null?"n/d":(v>=0?"+":"")+v.toFixed(1)+"%";
+  const fmt=v=>v==null?"n/d":(v>=0?"+":"")+v.toFixed(1).replace(".",",")+" %";
   const block=y=>`<div class='year-block'><div class='year-title'>${y}</div><ul>${
     [1,2,3,4].map(q=>`<li>${q}º trimestre: ${fmt((qData[y]||{})[q])}</li>`).join("")
   }</ul></div>`;
   el.innerHTML = `${block(y1)}${block(y2)}<div class='last-month'>${lastMonthLine(dates,vals)}</div>`;
 }
 
-/* Per-chart ranges */
 const RANGES = {geral:"Tudo", crc:"Tudo", iron:"Tudo", freight:"Tudo", fx:"Tudo"};
 const RANGE_TO_MONTHS = { "3M":3, "6M":6, "1A":12, "5A":60, "Tudo":null };
 
-/* Plot helpers */
-const isMobile = () => window.innerWidth < 720;
-function lineCfg(color){ return {mode:'lines+markers', line:{shape:'spline',smoothing:.6,width:2,color:color}, marker:{size:5,line:{width:1,color:'#fff'}}}; }
+function lineCfg(color){
+  return {
+    mode:'lines+markers',
+    line:{shape:'spline',smoothing:.6,width:isMobile()?2:3.2,color:color},
+    marker:{size:isMobile()?5:7,line:{width:1,color:'#fff'}}
+  };
+}
 function axisLayout(baseTitle, xticks){
-  const tf = isMobile() ? 10 : 12;  // tick font size
+  const tf = isMobile() ? 10 : 12;
   return {
     hovermode:'x unified',
-    legend:{orientation:'h', y:-0.25, font:{size:isMobile()?11:12}}, /* legend below the chart */
+    legend:{orientation:'h', y:-0.25, font:{size:isMobile()?11:12}},
     xaxis:{showgrid:false, tickmode:'array', ...xticks, tickfont:{size:tf}, automargin:true},
     yaxis:{gridcolor:'#e9ecef', zeroline:false, title:baseTitle, tickfont:{size:tf}, automargin:true},
     paper_bgcolor:'#fff', plot_bgcolor:'#fff',
@@ -321,14 +315,30 @@ function axisLayout(baseTitle, xticks){
   };
 }
 
-/* =========================
-   Drawers (charts)
-   ========================= */
+function formatPct(p){ return (p>=0?"+":"")+p.toFixed(1).replace(".",",")+" %"; }
+function updateVariation(key){
+  let arr=null;
+  if(key==='crc') arr=RAW.crc;
+  if(key==='iron') arr=RAW.iron;
+  if(key==='freight') arr=RAW.freight;
+  if(key==='fx') arr=RAW.usdbrl;
+  if(!arr) return;
+  const months = RANGE_TO_MONTHS[RANGES[key]];
+  const sliced = sliceByMonths(RAW.date, {[key]:arr}, months);
+  const y = sliced[key];
+  const first = y.find(v=>v!=null);
+  const last  = [...y].reverse().find(v=>v!=null);
+  const el = document.getElementById(`var-${key}`);
+  if(!el || first==null || last==null){ if(el) el.textContent="Variação: —"; return; }
+  const pct = (last-first)/first*100;
+  el.textContent = `Variação: ${formatPct(pct)}`;
+}
+
 function drawGeral(){
   const m = RANGE_TO_MONTHS[RANGES.geral];
   const sliced = sliceByMonths(RAW.date, {crc:RAW.crc, iron:RAW.iron, freight:RAW.freight, usdbrl:RAW.usdbrl, usdcny:RAW.usdcny}, m);
   const D = {date:sliced.dates, ...sliced};
-  const {tickvals,ticktext}=evenMonthTicks(D.date);
+  const {tickvals,ticktext}=evenMonthTicksWithYear(D.date);
   const lastHeader=document.getElementById('lastUpdateHeader');
   const lastBadge=document.getElementById('lastUpdate');
   if (RAW.date.length){
@@ -347,47 +357,49 @@ function drawGeral(){
     ...axisLayout('USD/TON (CRC, Minério, Frete)', {tickvals, ticktext}),
     yaxis2:{title:'Câmbio (USD/BRL, USD/CNY)', overlaying:'y', side:'right', tickfont:{size:isMobile()?10:12}, automargin:true}
   }, {responsive:true});
-  renderSummary('summaryGeral', quarterChanges(RAW.date, RAW.crc), RAW.date, RAW.crc);
 }
 
 function drawCRC(){
   const m = RANGE_TO_MONTHS[RANGES.crc];
   const sliced = sliceByMonths(RAW.date, {crc:RAW.crc}, m);
   const D = {date:sliced.dates, y:sliced.crc};
-  const {tickvals,ticktext}=evenMonthTicks(D.date);
+  const {tickvals,ticktext}=evenMonthTicksWithYear(D.date);
   Plotly.newPlot('chartCRC',[
     {x:D.date,y:D.y,name:'Aço CRC China (USD/TON)',...lineCfg('#007bff')}
   ], axisLayout('USD/TON', {tickvals, ticktext}), {responsive:true});
   renderSummary('summaryCRC', quarterChanges(RAW.date, RAW.crc), RAW.date, RAW.crc);
+  updateVariation('crc');
 }
 
 function drawIron(){
   const m = RANGE_TO_MONTHS[RANGES.iron];
   const sliced = sliceByMonths(RAW.date, {iron:RAW.iron}, m);
   const D = {date:sliced.dates, y:sliced.iron};
-  const {tickvals,ticktext}=evenMonthTicks(D.date);
+  const {tickvals,ticktext}=evenMonthTicksWithYear(D.date);
   Plotly.newPlot('chartIron',[
     {x:D.date,y:D.y,name:'Minério de Ferro (USD/TON)',...lineCfg('#ff6f00')}
   ], axisLayout('USD/TON', {tickvals, ticktext}), {responsive:true});
   renderSummary('summaryIron', quarterChanges(RAW.date, RAW.iron), RAW.date, RAW.iron);
+  updateVariation('iron');
 }
 
 function drawFreight(){
   const m = RANGE_TO_MONTHS[RANGES.freight];
   const sliced = sliceByMonths(RAW.date, {freight:RAW.freight}, m);
   const D = {date:sliced.dates, y:sliced.freight};
-  const {tickvals,ticktext}=evenMonthTicks(D.date);
+  const {tickvals,ticktext}=evenMonthTicksWithYear(D.date);
   Plotly.newPlot('chartFreight',[
     {x:D.date,y:D.y,name:'Frete Marítimo (USD/TEU)',...lineCfg('#00bfa6')}
   ], axisLayout('USD/TEU', {tickvals, ticktext}), {responsive:true});
   renderSummary('summaryFreight', quarterChanges(RAW.date, RAW.freight), RAW.date, RAW.freight);
+  updateVariation('freight');
 }
 
 function drawFX(){
   const m = RANGE_TO_MONTHS[RANGES.fx];
   const sliced = sliceByMonths(RAW.date, {usdbrl:RAW.usdbrl, usdcny:RAW.usdcny}, m);
   const D = {date:sliced.dates, usdbrl:sliced.usdbrl, usdcny:sliced.usdcny};
-  const {tickvals,ticktext}=evenMonthTicks(D.date);
+  const {tickvals,ticktext}=evenMonthTicksWithYear(D.date);
   const minB=Math.min(...D.usdbrl.filter(v=>v!=null)), maxB=Math.max(...D.usdbrl.filter(v=>v!=null));
   const minC=Math.min(...D.usdcny.filter(v=>v!=null)), maxC=Math.max(...D.usdcny.filter(v=>v!=null));
   Plotly.newPlot('chartFX',[
@@ -399,11 +411,9 @@ function drawFX(){
     yaxis2:{title:'USD/CNY', overlaying:'y', side:'right', range:[minC*0.98, maxC*1.02], tickfont:{size:isMobile()?10:12}, automargin:true}
   }, {responsive:true});
   renderSummary('summaryFX', quarterChanges(RAW.date, RAW.usdbrl), RAW.date, RAW.usdbrl);
+  updateVariation('fx');
 }
 
-/* =========================
-   Accordion (toggle sections)
-   ========================= */
 function setExpanded(cardWrap, caretEl, expand){
   if (expand){
     cardWrap.style.display = 'block';
@@ -435,7 +445,6 @@ function initAccordion(){
     });
   });
 
-  // Initial states (Visão Geral open, others closed)
   setExpanded(document.getElementById('geral-card'), document.getElementById('caret-geral'), true);
   setExpanded(document.getElementById('crc-card'), document.getElementById('caret-crc'), false);
   setExpanded(document.getElementById('iron-card'), document.getElementById('caret-iron'), false);
@@ -443,9 +452,6 @@ function initAccordion(){
   setExpanded(document.getElementById('fx-card'), document.getElementById('caret-fx'), false);
 }
 
-/* =========================
-   Range selectors (per chart)
-   ========================= */
 function setRangeActive(rangeBarId, key){
   const bar=document.getElementById(rangeBarId);
   bar.querySelectorAll('.rbtn[data-range]').forEach(b=>b.classList.toggle('active', b.dataset.range===key));
@@ -464,71 +470,11 @@ function initRanges(){
       const btn = e.target.closest('.rbtn');
       if(!btn) return;
       const sel = btn.dataset.range;
-      if(sel){ RANGES[key] = sel; setRangeActive(rid, sel); drawer(); }
+      if(sel){ RANGES[key] = sel; setRangeActive(rid, sel); drawer(); if(key!=='geral') updateVariation(key); }
     });
   });
 }
 
-/* =========================
-   PDF Export (2 pages, landscape)
-   - Page 1: header + Visão Geral (pdf-page1)
-   - Page 2: remaining sections (pdf-page2)
-   - Header only on page 1
-   ========================= */
-async function exportTwoPagePDF(){
-  const { jsPDF } = window.jspdf;
-
-  // Ensure all sections are expanded for correct canvas height on page 2
-  [['crc-card','caret-crc'],['iron-card','caret-iron'],['freight-card','caret-freight'],['fx-card','caret-fx']]
-    .forEach(([id, cid])=> setExpanded(document.getElementById(id), document.getElementById(cid), true));
-  // Redraw all charts to ensure correct sizing before capture
-  drawGeral(); drawCRC(); drawIron(); drawFreight(); drawFX();
-  await new Promise(r=>setTimeout(r,500)); // let plots settle
-
-  // 1️⃣ Capture PAGE 1 (header + Visão Geral)
-  const page1El = document.getElementById('pdf-page1');
-  const canvas1 = await html2canvas(page1El, {
-    scale: 2, useCORS: true,
-    windowWidth: page1El.scrollWidth, windowHeight: page1El.scrollHeight
-  });
-
-  // 2️⃣ Capture PAGE 2 (remaining charts)
-  const page2El = document.getElementById('pdf-page2');
-  const canvas2 = await html2canvas(page2El, {
-    scale: 2, useCORS: true,
-    windowWidth: page2El.scrollWidth, windowHeight: page2El.scrollHeight
-  });
-
-  // 3️⃣ Build landscape A4 PDF and place each canvas centered, scaled to fit
-  const pdf = new jsPDF({orientation:'landscape', unit:'mm', format:'a4'});
-  const pw = pdf.internal.pageSize.getWidth();
-  const ph = pdf.internal.pageSize.getHeight();
-
-  function addCanvasAsPage(cnv, isFirstPage=false){
-    const img = cnv.toDataURL('image/png');
-    const ratioW = pw / cnv.width;
-    const ratioH = ph / cnv.height;
-    const ratio = Math.min(ratioW, ratioH);       // scale to fit page
-    const w = cnv.width * ratio;
-    const h = cnv.height * ratio;
-    const x = (pw - w)/2;
-    const y = (ph - h)/2;
-    if(!isFirstPage) pdf.addPage('a4','landscape');
-    pdf.addImage(img, 'PNG', x, y, w, h);
-  }
-
-  addCanvasAsPage(canvas1, true);  // page 1 (with header)
-  addCanvasAsPage(canvas2, false); // page 2 (content only)
-
-  pdf.save('indices_moveleiro_v4_5.pdf');
-}
-
-/* Wire export button */
-document.getElementById('btnExportAll').addEventListener('click', exportTwoPagePDF);
-
-/* =========================
-   Boot
-   ========================= */
 (async function(){
   RAW = await loadCSV();
   initAccordion();
