@@ -2,7 +2,7 @@
 <html lang="pt-br">
 <head>
 <meta charset="utf-8"/>
-<title>Índices Moveleiro — Dashboard v4.8</title>
+<title>Índices Moveleiro — Dashboard v4.9</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 
 <!-- Plotly & PapaParse -->
@@ -66,10 +66,8 @@ section{margin-bottom:18px}
 }
 .rbtn.active, .rbtn:hover{background:#000;color:#fff;border-color:#000}
 
-/* NEW v4.8: variation pill styled like buttons, full width on mobile */
-.varline{
-  width:100%; display:flex; justify-content:flex-start; margin-top:6px;
-}
+/* v4.8: variation pill styled like buttons, full width on mobile */
+.varline{ width:100%; display:flex; justify-content:flex-start; margin-top:6px; }
 .varpill{
   background:var(--accent); color:#000; border:1px solid var(--accent-border);
   padding:6px 12px; border-radius:10px; font-weight:600; font-size:14px;
@@ -86,7 +84,7 @@ section{margin-bottom:18px}
 .year-block ul{list-style:none;padding-left:0;margin:0}
 .year-block li{margin:2px 0}
 
-/* NEW v4.8: 4-column FX grid */
+/* v4.8: 4-column FX grid */
 .summary-grid.fx{
   display:grid; gap:16px; margin-top:12px;
   grid-template-columns: repeat(4, 1fr);
@@ -115,7 +113,7 @@ section{margin-bottom:18px}
 <body>
 
 <div class="header">
-  <div class="title">Índices Moveleiro <span style="opacity:.7">v4.8</span></div>
+  <div class="title">Índices Moveleiro <span style="opacity:.7">v4.9</span></div>
   <div class="meta" id="lastUpdateHeader">Última atualização: —</div>
   <div class="spacer"></div>
   <button class="btn" id="btnExportAll">Exportar PDF</button>
@@ -135,7 +133,7 @@ section{margin-bottom:18px}
         <button class="rbtn" data-range="5A">5A</button>
         <button class="rbtn active" data-range="Tudo">Tudo</button>
       </div>
-      <!-- NEW v4.8: variation line for GERAl (composite: show overall? We omit composite metrics by spec; pill kept hidden) -->
+      <!-- (Visão Geral variation pill intentionally hidden) -->
       <div class="varline" id="varline-geral" style="display:none;">
         <div class="varpill" id="varpill-geral"></div>
       </div>
@@ -157,7 +155,6 @@ section{margin-bottom:18px}
         <button class="rbtn" data-range="5A">5A</button>
         <button class="rbtn active" data-range="Tudo">Tudo</button>
       </div>
-      <!-- NEW v4.8: variation pill (total | média | vol) -->
       <div class="varline"><div class="varpill" id="varpill-crc">—</div></div>
       <div id="chartCRC" class="chart"></div>
       <div id="summaryCRC" class="summary-grid"></div>
@@ -178,7 +175,6 @@ section{margin-bottom:18px}
         <button class="rbtn" data-range="5A">5A</button>
         <button class="rbtn active" data-range="Tudo">Tudo</button>
       </div>
-      <!-- NEW v4.8: variation pill -->
       <div class="varline"><div class="varpill" id="varpill-iron">—</div></div>
       <div id="chartIron" class="chart"></div>
       <div id="summaryIron" class="summary-grid"></div>
@@ -199,7 +195,6 @@ section{margin-bottom:18px}
         <button class="rbtn" data-range="5A">5A</button>
         <button class="rbtn active" data-range="Tudo">Tudo</button>
       </div>
-      <!-- NEW v4.8: variation pill -->
       <div class="varline"><div class="varpill" id="varpill-freight">—</div></div>
       <div id="chartFreight" class="chart"></div>
       <div id="summaryFreight" class="summary-grid"></div>
@@ -220,10 +215,8 @@ section{margin-bottom:18px}
         <button class="rbtn" data-range="5A">5A</button>
         <button class="rbtn active" data-range="Tudo">Tudo</button>
       </div>
-      <!-- NEW v4.8: variation pill for FX (dual currencies in one line) -->
       <div class="varline"><div class="varpill" id="varpill-fx">—</div></div>
       <div id="chartFX" class="chart"></div>
-      <!-- NEW v4.8: 4-column FX summary grid -->
       <div id="summaryFX" class="summary-grid fx"></div>
     </div>
   </div>
@@ -241,15 +234,36 @@ function normalizeRow(r){ return {
   date:r.date, crc:toNumber(r.CRC_China_USD_ton), iron:toNumber(r.Iron_Ore_USD_ton),
   freight:toNumber(r.Sea_Freight_USD_ton), usdbrl:toNumber(r.USD_BRL_buy), usdcny:toNumber(r.USD_CNY)
 };}
+
+/* v4.9 NEW: reduce Sea Freight to one entry per month (keeps the latest date) */
+function monthlyReduceFreight(dates, values){
+  const map = new Map(); // key = YYYY-M, value = {date, value}
+  for(let i=0;i<dates.length;i++){
+    const d = new Date(dates[i]);
+    const key = `${d.getFullYear()}-${d.getMonth()+1}`;
+    map.set(key, {date: dates[i], value: values[i]}); // overwrite → latest wins
+  }
+  const reduced = Array.from(map.values());
+  // Ensure chronological order in case CSV isn't strictly sorted
+  reduced.sort((a,b)=> new Date(a.date) - new Date(b.date));
+  return {dates: reduced.map(v=>v.date), values: reduced.map(v=>v.value)};
+}
+
 function loadCSV(){
   return new Promise((res,rej)=>{
     Papa.parse(`${CSV_URL}?v=${Date.now()}`,{
       download:true, header:true, complete:(r)=>{
         const rows=r.data.filter(x=>x&&x.date);
         const n=rows.map(normalizeRow);
-        const o={date:[],crc:[],iron:[],freight:[],usdbrl:[],usdcny:[]};
+        const o={date:[],crc:[],iron:[],freight_raw:[],usdbrl:[],usdcny:[]};
         n.forEach(v=>{ o.date.push(v.date); o.crc.push(v.crc); o.iron.push(v.iron);
-          o.freight.push(v.freight); o.usdbrl.push(v.usdbrl); o.usdcny.push(v.usdcny); });
+          o.freight_raw.push(v.freight); o.usdbrl.push(v.usdbrl); o.usdcny.push(v.usdcny); });
+
+        /* v4.9 NEW: build monthly-reduced freight arrays */
+        const reduced = monthlyReduceFreight(o.date, o.freight_raw);
+        o.freight_dates = reduced.dates;       // monthly timestamps for freight
+        o.freight = reduced.values;            // monthly values for freight
+
         res(o);
       }, error:rej
     });
@@ -298,7 +312,7 @@ function quarterChanges(dates, vals){
   return out;
 }
 
-/* NEW v4.8: analytics for variation line */
+/* Analytics for variation line */
 function metricsForSeries(dates, series, months){
   const sliced = sliceByMonths(dates, {y:series}, months);
   const y = sliced.y.filter(v=>v!=null);
@@ -345,7 +359,7 @@ function renderSummary(containerId, qData, dates, vals){
   el.innerHTML = `<div class="summary-grid">${block(y1)}${block(y2)}</div>`;
 }
 
-/* NEW v4.8: Render FX summaries as 4 columns (2025 BRL | 2025 CNY | 2024 BRL | 2024 CNY) */
+/* FX summaries as 4 columns (2025 BRL | 2025 CNY | 2024 BRL | 2024 CNY) */
 function renderSummaryFX(containerId, dates, usdbrl, usdcny){
   const el=document.getElementById(containerId); if(!el) return;
   const qb = quarterChanges(dates, usdbrl);
@@ -430,7 +444,6 @@ function drawCRC(){
   ], axisLayout('USD/TON', {tickvals, ticktext}), {responsive:true});
   renderSummary('summaryCRC', quarterChanges(RAW.date, RAW.crc), RAW.date, RAW.crc);
 
-  /* NEW v4.8: update variation pill (total | média | vol) */
   const m = metricsForSeries(RAW.date, RAW.crc, months);
   document.getElementById('varpill-crc').textContent =
     `Variação total: ${pct(m.total)} | Média mensal: ${pct(m.avg)} | Volatilidade: ${pct(m.vol)}`;
@@ -446,7 +459,6 @@ function drawIron(){
   ], axisLayout('USD/TON', {tickvals, ticktext}), {responsive:true});
   renderSummary('summaryIron', quarterChanges(RAW.date, RAW.iron), RAW.date, RAW.iron);
 
-  /* NEW v4.8: variation pill */
   const m = metricsForSeries(RAW.date, RAW.iron, months);
   document.getElementById('varpill-iron').textContent =
     `Variação total: ${pct(m.total)} | Média mensal: ${pct(m.avg)} | Volatilidade: ${pct(m.vol)}`;
@@ -454,16 +466,22 @@ function drawIron(){
 
 function drawFreight(){
   const months = RANGE_TO_MONTHS[RANGES.freight];
-  const sliced = sliceByMonths(RAW.date, {freight:RAW.freight}, months);
+
+  /* v4.9 NEW: use monthly-reduced freight dates/values for everything */
+  const sliced = sliceByMonths(RAW.freight_dates, {freight:RAW.freight}, months);
   const D = {date:sliced.dates, y:sliced.freight};
+
   const {tickvals,ticktext}=evenMonthTicksWithYear(D.date);
   Plotly.newPlot('chartFreight',[
     {x:D.date,y:D.y,name:'Frete Marítimo (USD/TEU)',...lineCfg('#00bfa6')}
   ], axisLayout('USD/TEU', {tickvals, ticktext}), {responsive:true});
-  renderSummary('summaryFreight', quarterChanges(RAW.date, RAW.freight), RAW.date, RAW.freight);
 
-  /* NEW v4.8: variation pill */
-  const m = metricsForSeries(RAW.date, RAW.freight, months);
+  // Quarterly summary & last-month based on reduced monthly freight series
+  const qFreight = quarterChanges(RAW.freight_dates, RAW.freight);
+  renderSummary('summaryFreight', qFreight, RAW.freight_dates, RAW.freight);
+
+  // Variation pill based on reduced monthly freight series
+  const m = metricsForSeries(RAW.freight_dates, RAW.freight, months);
   document.getElementById('varpill-freight').textContent =
     `Variação total: ${pct(m.total)} | Média mensal: ${pct(m.avg)} | Volatilidade: ${pct(m.vol)}`;
 }
@@ -484,8 +502,8 @@ function drawFX(){
     yaxis2:{title:'USD/CNY', overlaying:'y', side:'right', range:[minC*0.98, maxC*1.02], tickfont:{size:isMobile()?10:12}, automargin:true}
   }, {responsive:true});
 
-  /* NEW v4.8: 4-column FX summaries + variation pill with both currencies */
   renderSummaryFX('summaryFX', RAW.date, RAW.usdbrl, RAW.usdcny);
+
   const mb = metricsForSeries(RAW.date, RAW.usdbrl, months);
   const mc = metricsForSeries(RAW.date, RAW.usdcny, months);
   document.getElementById('varpill-fx').textContent =
@@ -571,4 +589,3 @@ function initRanges(){
 </script>
 </body>
 </html>
-
