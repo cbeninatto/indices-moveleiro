@@ -2,38 +2,30 @@
 <html lang="pt-br">
 <head>
 <meta charset="utf-8"/>
-<title>Índices Moveleiro — Modern Dashboard v3.9</title>
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Índices Moveleiro — Dashboard v4.0</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap');
-:root {
-  --bg: #dfe1e1;
-  --card: #ffffff;
-  --shadow: 0 3px 10px rgba(0,0,0,0.08);
-  --title-bg: #000000;
-  --title-fg: #ffffff;
-  --accent: #f5b95f;
-}
-* { box-sizing: border-box; }
-body { background: var(--bg); color:#111; font-family: Inter, Arial, sans-serif; margin:24px; }
-section { margin-bottom: 34px; }
-.titlebar { background: var(--title-bg); color: var(--title-fg); padding: 10px 16px; border-radius: 6px 6px 0 0; font-weight: 600; }
-.card { background: var(--card); box-shadow: var(--shadow); border-radius: 0 0 10px 10px; padding: 16px; }
-.controls { display:flex; gap:10px; align-items:center; margin: 12px 0 8px 0; flex-wrap: wrap; }
-.status { margin-left:auto; font-size:12px; color:#333; background:#fff; padding:6px 10px; border:1px solid #e5e5e5; border-radius:8px; }
-input[type=date], button { padding: 8px 12px; border-radius:8px; border:1px solid #e5e5e5; }
-button { background:#f7f7f7; cursor:pointer; }
-#chartGeral { width:100%; height:600px; }
-#chartCRC, #chartIron, #chartFreight, #chartFX { width:100%; height:460px; }
-.small { color:#666; font-size:12px; }
-.badge { background:#fff; border:1px solid #e5e5e5; padding:6px 10px; border-radius:8px; font-size:12px; }
-@media (max-width: 720px) {
-  body { margin: 12px; }
-  #chartGeral { height: 520px; }
-  #chartCRC, #chartIron, #chartFreight, #chartFX { height: 380px; }
-}
+:root{--bg:#dfe1e1;--card:#fff;--shadow:0 3px 10px rgba(0,0,0,.08);--title-bg:#000;--title-fg:#fff;--accent:#f5b95f;}
+body{background:var(--bg);font-family:Inter,Arial,sans-serif;color:#111;margin:24px}
+section{margin-bottom:34px}
+.titlebar{background:var(--title-bg);color:var(--title-fg);padding:10px 16px;border-radius:6px 6px 0 0;font-weight:600}
+.card{background:var(--card);box-shadow:var(--shadow);border-radius:0 0 10px 10px;padding:16px}
+.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:12px 0 8px}
+.status{margin-left:auto;font-size:12px;color:#333;background:#fff;padding:6px 10px;border:1px solid #e5e5e5;border-radius:8px}
+input[type=date],button{padding:8px 12px;border-radius:8px;border:1px solid #e5e5e5}
+button{background:#f7f7f7;cursor:pointer}
+#chartGeral{width:100%;height:600px}
+#chartCRC,#chartIron,#chartFreight,#chartFX{width:100%;height:460px}
+.badge{background:#fff;border:1px solid #e5e5e5;padding:6px 10px;border-radius:8px;font-size:12px}
+.summary-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
+.year-block{background:#f8f9fb;border-left:6px solid var(--accent);padding:10px 14px;border-radius:8px;box-shadow:var(--shadow)}
+.year-title{font-weight:600;margin-bottom:6px;color:#222}
+.year-block ul{list-style:none;padding-left:0;margin:0}
+.last-month{grid-column:1/-1;margin-top:10px;color:#111;font-weight:600}
+@media(max-width:720px){body{margin:12px}#chartGeral{height:520px}#chartCRC,#chartIron,#chartFreight,#chartFX{height:380px}.summary-grid{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -42,13 +34,13 @@ button { background:#f7f7f7; cursor:pointer; }
   <div class="titlebar">Índices Moveleiro</div>
   <div class="card">
     <div class="controls">
-      <label>Data inicial: <input type="date" id="start"></label>
-      <label>Data final: <input type="date" id="end"></label>
+      <label>Data inicial:<input type="date" id="start"></label>
+      <label>Data final:<input type="date" id="end"></label>
       <button id="apply">Aplicar filtro</button>
       <button id="refresh">Atualizar dados 🔄</button>
       <button id="download">Baixar CSV</button>
-      <span id="info" class="small badge"></span>
-      <span id="lastUpdate" class="small badge"></span>
+      <span id="info" class="badge"></span>
+      <span id="lastUpdate" class="badge"></span>
       <span id="status" class="status"></span>
     </div>
     <div id="chartGeral"></div>
@@ -57,221 +49,76 @@ button { background:#f7f7f7; cursor:pointer; }
 
 <section id="crc">
   <div class="titlebar">Aço CRC China (USD/TON)</div>
-  <div class="card"><div id="chartCRC"></div></div>
+  <div class="card">
+    <div id="chartCRC"></div>
+    <div id="summaryCRC" class="summary-grid"></div>
+  </div>
 </section>
 
 <section id="iron">
   <div class="titlebar">Minério de Ferro (USD/TON)</div>
-  <div class="card"><div id="chartIron"></div></div>
+  <div class="card">
+    <div id="chartIron"></div>
+    <div id="summaryIron" class="summary-grid"></div>
+  </div>
 </section>
 
 <section id="freight">
   <div class="titlebar">Frete Marítimo (USD/TEU)</div>
-  <div class="card"><div id="chartFreight"></div></div>
+  <div class="card">
+    <div id="chartFreight"></div>
+    <div id="summaryFreight" class="summary-grid"></div>
+  </div>
 </section>
 
 <section id="fx">
   <div class="titlebar">Taxas de Câmbio (USD/BRL e USD/CNY)</div>
-  <div class="card"><div id="chartFX"></div></div>
+  <div class="card">
+    <div id="chartFX"></div>
+    <div id="summaryFX" class="summary-grid"></div>
+  </div>
 </section>
 
 <script>
-const CSV_URL = "data/indices_moveleiro.csv";
-let RAW = null;
-const PT_ABBR = ["JAN","FEV","MAR","ABR","MAI","JUN","JUL","AGO","SET","OUT","NOV","DEZ"];
-
-function toNumber(v) {
-  if (v === null || v === undefined || v === "") return null;
-  if (typeof v === "number") return v;
-  const s = String(v).trim().replace(/\s+/g,'');
-  const normalized = s.replace(",", ".");
-  const n = parseFloat(normalized);
-  return Number.isFinite(n) ? n : null;
+const CSV_URL="data/indices_moveleiro.csv";
+let RAW=null;
+const PT_ABBR=["JAN","FEV","MAR","ABR","MAI","JUN","JUL","AGO","SET","OUT","NOV","DEZ"];
+function toNumber(v){if(v==null||v==="")return null;if(typeof v==="number")return v;const n=parseFloat(String(v).replace(",",".").trim());return Number.isFinite(n)?n:null;}
+function normalizeRow(r){return{date:r.date,crc:toNumber(r.CRC_China_USD_ton),iron:toNumber(r.Iron_Ore_USD_ton),freight:toNumber(r.Sea_Freight_USD_ton),usdbrl:toNumber(r.USD_BRL_buy),usdcny:toNumber(r.USD_CNY)};}
+function monthTicks(d){const s=new Set(),tv=[],tt=[];for(const x of d){const dt=new Date(x),k=dt.getFullYear()+"-"+(dt.getMonth()+1);if(!s.has(k)){s.add(k);tv.push(x);tt.push(PT_ABBR[dt.getMonth()]);}}return{tickvals:tv,ticktext:tt};}
+function filterData(s=null,e=null){const S=s?new Date(s):null,E=e?new Date(e):null,out={date:[],crc:[],iron:[],freight:[],usdbrl:[],usdcny:[]};for(let i=0;i<RAW.date.length;i++){const d=new Date(RAW.date[i]);if((S&&d<S)||(E&&d>E))continue;for(const k in out)if(k!=="date")out[k].push(RAW[k][i]);out.date.push(RAW.date[i]);}return out;}
+function loadCSV(){return new Promise((res,rej)=>{Papa.parse(`${CSV_URL}?v=${Date.now()}`,{download:true,header:true,complete:r=>{const rows=r.data.filter(x=>x&&x.date),n=rows.map(normalizeRow),o={date:[],crc:[],iron:[],freight:[],usdbrl:[],usdcny:[]};n.forEach(r=>{for(const k in o)o[k].push(r[k]);});res(o);},error:rej});});}
+function calcQuarterChanges(dates,vals){const yearly={};for(let i=0;i<dates.length;i++){const d=new Date(dates[i]),y=d.getFullYear(),q=Math.floor(d.getMonth()/3)+1;yearly[y]=yearly[y]||{1:[],2:[],3:[],4:[]};yearly[y][q].push(vals[i]);}const out={};for(const y in yearly){out[y]={};for(let q=1;q<=4;q++){const a=yearly[y][q];if(!a.length){out[y][q]=null;continue;}const f=a[0],l=a[a.length-1];out[y][q]=(f&&l)?((l-f)/f*100):null;}}return out;}
+function calcLastMonthLine(dates,vals){if(dates.length<2)return "";const d1=new Date(dates.at(-2)),d2=new Date(dates.at(-1)),v1=vals.at(-2),v2=vals.at(-1);if(!v1||!v2)return"";const pct=((v2-v1)/v1*100).toFixed(1);const m1=PT_ABBR[d1.getMonth()],m2=PT_ABBR[d2.getMonth()],y=d2.getFullYear();return`Último mês (${m1} – ${m2} ${y}): ${pct>0?"+":""}${pct}%`;}
+function renderSummary(id,obj,dates,vals){const el=document.getElementById(id);if(!el)return;el.innerHTML="";const yrs=Object.keys(obj).map(Number).sort((a,b)=>b-a),[y1,y2]=yrs.length>=2?[yrs[0],yrs[1]]:[yrs[0],yrs[0]],fmt=v=>v==null?"n/d":(v>=0?"+":"")+v.toFixed(1)+"%";const block=y=>{const v=obj[y]||{};return`<div class='year-block'><div class='year-title'>${y}</div><ul>${[1,2,3,4].map(q=>`<li>${q}º trimestre: ${fmt(v[q])}</li>`).join("")}</ul></div>`;};el.innerHTML=`${block(y1)}${block(y2)}<div class='last-month'>${calcLastMonthLine(dates,vals)}</div>`;}
+function drawAll(s=null,e=null){const D=filterData(s,e),{tickvals,ticktext}=monthTicks(D.date);const lineCfg=c=>({mode:"lines+markers",line:{shape:"spline",smoothing:.6,width:2.2,color:c},marker:{size:8,line:{width:1,color:"#fff"}}});Plotly.newPlot("chartGeral",[
+  {x:D.date,y:D.crc,name:"Aço CRC China (USD/TON)",...lineCfg("#007bff")},
+  {x:D.date,y:D.iron,name:"Minério de Ferro (USD/TON)",...lineCfg("#ff6f00")},
+  {x:D.date,y:D.freight,name:"Frete Marítimo (USD/TEU)",...lineCfg("#00bfa6")},
+  {x:D.date,y:D.usdbrl,name:"USD/BRL",yaxis:"y2",...lineCfg("#7e57c2")},
+  {x:D.date,y:D.usdcny,name:"USD/CNY",yaxis:"y2",...lineCfg("#e53935")}
+],{hovermode:"x unified",legend:{orientation:"h",y:1.12},xaxis:{showgrid:false,tickmode:"array",tickvals,ticktext},
+  yaxis:{gridcolor:"#e9ecef",zeroline:false,title:"USD/TON (CRC, Minério, Frete)"},yaxis2:{title:"Câmbio (USD/BRL, USD/CNY)",overlaying:"y",side:"right"},paper_bgcolor:"#fff",plot_bgcolor:"#fff"});
+const sub={hovermode:"x unified",xaxis:{showgrid:false,tickmode:"array",tickvals,ticktext},yaxis:{gridcolor:"#e9ecef",zeroline:false},paper_bgcolor:"#fff",plot_bgcolor:"#fff"};
+Plotly.newPlot("chartCRC",[ {x:D.date,y:D.crc,name:"Aço CRC China (USD/TON)",...lineCfg("#007bff")} ],{...sub,yaxis:{...sub.yaxis,title:"USD/TON"}});
+Plotly.newPlot("chartIron",[ {x:D.date,y:D.iron,name:"Minério de Ferro (USD/TON)",...lineCfg("#ff6f00")} ],{...sub,yaxis:{...sub.yaxis,title:"USD/TON"}});
+Plotly.newPlot("chartFreight",[ {x:D.date,y:D.freight,name:"Frete Marítimo (USD/TEU)",...lineCfg("#00bfa6")} ],{...sub,yaxis:{...sub.yaxis,title:"USD/TEU"}});
+const minB=Math.min(...D.usdbrl.filter(v=>v)),maxB=Math.max(...D.usdbrl.filter(v=>v)),minC=Math.min(...D.usdcny.filter(v=>v)),maxC=Math.max(...D.usdcny.filter(v=>v));
+Plotly.newPlot("chartFX",[ {x:D.date,y:D.usdbrl,name:"USD/BRL",...lineCfg("#7e57c2")},{x:D.date,y:D.usdcny,name:"USD/CNY",yaxis:"y2",...lineCfg("#e53935")} ],
+  {...sub,legend:{orientation:"h",y:1.12},yaxis:{...sub.yaxis,title:"USD/BRL",range:[minB*.98,maxB*1.02]},yaxis2:{title:"USD/CNY",overlaying:"y",side:"right",range:[minC*.98,maxC*1.02]}});
+// --- summaries ---
+renderSummary("summaryCRC",calcQuarterChanges(D.date,D.crc),D.date,D.crc);
+renderSummary("summaryIron",calcQuarterChanges(D.date,D.iron),D.date,D.iron);
+renderSummary("summaryFreight",calcQuarterChanges(D.date,D.freight),D.date,D.freight);
+renderSummary("summaryFX",calcQuarterChanges(D.date,D.usdbrl),D.date,D.usdbrl);
 }
-function normalizeRow(r) {
-  return {
-    date: r.date,
-    crc: toNumber(r.CRC_China_USD_ton),
-    iron: toNumber(r.Iron_Ore_USD_ton),
-    freight: toNumber(r.Sea_Freight_USD_ton),
-    usdbrl: toNumber(r.USD_BRL_buy),
-    usdcny: toNumber(r.USD_CNY)
-  };
-}
-function monthTicks(dates) {
-  const seen = new Set(), tickvals = [], ticktext = [];
-  for (let i=0;i<dates.length;i++) {
-    const dt = new Date(dates[i]);
-    const key = dt.getFullYear()+"-"+(dt.getMonth()+1);
-    if (!seen.has(key)) { seen.add(key); tickvals.push(dates[i]); ticktext.push(PT_ABBR[dt.getMonth()]); }
-  }
-  return {tickvals, ticktext};
-}
-function filterData(s=null, e=null) {
-  const S = s? new Date(s):null, E = e? new Date(e):null;
-  const out={date:[],crc:[],iron:[],freight:[],usdbrl:[],usdcny:[]};
-  for (let i=0;i<RAW.date.length;i++){
-    const d=new Date(RAW.date[i]);
-    if ((S&&d<S)||(E&&d>E)) continue;
-    out.date.push(RAW.date[i]);
-    out.crc.push(RAW.crc[i]);
-    out.iron.push(RAW.iron[i]);
-    out.freight.push(RAW.freight[i]);
-    out.usdbrl.push(RAW.usdbrl[i]);
-    out.usdcny.push(RAW.usdcny[i]);
-  }
-  return out;
-}
-function loadCSV(){
-  return new Promise((resolve,reject)=>{
-    Papa.parse(`${CSV_URL}?v=${Date.now()}`,{
-      download:true, header:true,
-      complete:(res)=>{
-        const rows=res.data.filter(r=>r&&r.date);
-        const n=rows.map(normalizeRow);
-        const out={date:[],crc:[],iron:[],freight:[],usdbrl:[],usdcny:[]};
-        n.forEach(r=>{
-          out.date.push(r.date); out.crc.push(r.crc);
-          out.iron.push(r.iron); out.freight.push(r.freight);
-          out.usdbrl.push(r.usdbrl); out.usdcny.push(r.usdcny);
-        });
-        resolve(out);
-      }, error:reject
-    });
-  });
-}
-function drawAll(s=null,e=null){
-  const D=filterData(s,e);
-  const info=document.getElementById('info');
-  if(info) info.innerText=D.date.length?`Período: ${D.date[0]} a ${D.date[D.date.length-1]} — ${D.date.length} pontos`:'';
-  const last=document.getElementById('lastUpdate');
-  if(last&&D.date.length){
-    const dt=new Date(D.date[D.date.length-1]);
-    last.innerText=`Última atualização: ${dt.toLocaleDateString('pt-BR',{day:'2-digit',month:'short',year:'numeric'})}`;
-  }
-  const status=document.getElementById('status');
-  if(status){
-    const flags=[
-      ['Aço CRC',D.crc],['Minério de Ferro',D.iron],['Frete Marítimo',D.freight],['USD/BRL',D.usdbrl],['USD/CNY',D.usdcny]
-    ].map(([n,a])=>`${n}: ${a.some(v=>v)?'✅':'⚠️ sem dados'}`);
-    status.innerText=flags.join(' | ');
-  }
-  const {tickvals,ticktext}=monthTicks(D.date);
-  const lineCfg=(c)=>({mode:'lines+markers',line:{shape:'spline',smoothing:0.6,width:2.2,color:c},marker:{size:8,line:{width:1,color:'#fff'}}});
-  // === Geral ===
-// ===== Main Chart: Índices Moveleiro =====
-Plotly.newPlot('chartGeral', [
-  // --- Industrial indices ---
-  { x: D.date, y: D.crc, name: 'Aço CRC China (USD/TON)', ...lineCfg('#007bff') },
-  { x: D.date, y: D.iron, name: 'Minério de Ferro (USD/TON)', ...lineCfg('#ff6f00') },
-  { x: D.date, y: D.freight, name: 'Frete Marítimo (USD/TEU)', ...lineCfg('#00bfa6') },
-
-  // --- Exchange rates (now solid lines) ---
-  {
-    x: D.date,
-    y: D.usdbrl,
-    name: 'USD/BRL',
-    yaxis: 'y2',
-    ...lineCfg('#7e57c2'),
-    line: { shape: 'spline', smoothing: 0.6, width: 2.2, color: '#7e57c2' },
-    marker: { size: 7, line: { width: 1, color: '#fff' } }
-  },
-  {
-    x: D.date,
-    y: D.usdcny,
-    name: 'USD/CNY',
-    yaxis: 'y2',
-    ...lineCfg('#e53935'),
-    line: { shape: 'spline', smoothing: 0.6, width: 2.2, color: '#e53935' },
-    marker: { size: 7, line: { width: 1, color: '#fff' } }
-  }
-], {
-  hovermode: 'x unified',
-  legend: { orientation: 'h', y: 1.12 },
-  xaxis: {
-    showgrid: false,
-    tickmode: 'array',
-    tickvals: tickvals,
-    ticktext: ticktext
-  },
-  yaxis: {
-    gridcolor: '#e9ecef',
-    zeroline: false,
-    title: 'USD/TON (CRC, Minério, Frete)',
-    side: 'left'
-  },
-  yaxis2: {
-    title: 'Câmbio (USD/BRL, USD/CNY)',
-    overlaying: 'y',
-    side: 'right',
-    showgrid: false
-  },
-  paper_bgcolor: '#ffffff',
-  plot_bgcolor: '#ffffff',
-  transition: { duration: 300, easing: 'cubic-in-out' }
-});
-
-    hovermode:'x unified',
-    legend:{orientation:'h',y:1.12},
-    xaxis:{showgrid:false,tickmode:'array',tickvals,ticktext},
-    yaxis:{title:'USD/TON (CRC, Minério, Frete)',gridcolor:'#e9ecef',zeroline:false},
-    yaxis2:{title:'Câmbio ×100',overlaying:'y',side:'right'},
-    paper_bgcolor:'#fff',plot_bgcolor:'#fff'
-  });
-  const subLayout={hovermode:'x unified',xaxis:{showgrid:false,tickmode:'array',tickvals,ticktext},yaxis:{gridcolor:'#e9ecef',zeroline:false},paper_bgcolor:'#fff',plot_bgcolor:'#fff'};
-  Plotly.newPlot('chartCRC',[{x:D.date,y:D.crc,name:'Aço CRC China (USD/TON)',...lineCfg('#007bff')}],{...subLayout,yaxis:{...subLayout.yaxis,title:'USD/TON'}});
-  Plotly.newPlot('chartIron',[{x:D.date,y:D.iron,name:'Minério de Ferro (USD/TON)',...lineCfg('#ff6f00')}],{...subLayout,yaxis:{...subLayout.yaxis,title:'USD/TON'}});
-  Plotly.newPlot('chartFreight',[{x:D.date,y:D.freight,name:'Frete Marítimo (USD/TEU)',...lineCfg('#00bfa6')}],{...subLayout,yaxis:{...subLayout.yaxis,title:'USD/TEU'}});
-  // === FX FIXED ===
-  const minBRL=Math.min(...D.usdbrl.filter(v=>v)), maxBRL=Math.max(...D.usdbrl.filter(v=>v));
-  const minCNY=Math.min(...D.usdcny.filter(v=>v)), maxCNY=Math.max(...D.usdcny.filter(v=>v));
-  Plotly.newPlot('chartFX',[
-    {x:D.date,y:D.usdbrl,name:'USD/BRL',...lineCfg('#7e57c2')},
-    {x:D.date,y:D.usdcny,name:'USD/CNY',yaxis:'y2',...lineCfg('#e53935')}
-  ],{
-    hovermode:'x unified',
-    legend:{orientation:'h',y:1.12},
-    xaxis:{showgrid:false,tickmode:'array',tickvals,ticktext},
-    yaxis:{title:'USD/BRL',gridcolor:'#e9ecef',zeroline:false,side:'left',range:[minBRL*0.98,maxBRL*1.02]},
-    yaxis2:{title:'USD/CNY',overlaying:'y',side:'right',range:[minCNY*0.98,maxCNY*1.02]},
-    paper_bgcolor:'#fff',plot_bgcolor:'#fff'
-  });
-}
-function wireUI(){
-  document.getElementById('apply').addEventListener('click',()=>{
-    drawAll(document.getElementById('start').value||null,document.getElementById('end').value||null);
-  });
-  document.getElementById('refresh').addEventListener('click',async()=>{
-    setBusy("Atualizando dados…");
-    try{RAW=await loadCSV();initDateInputs();clearBusy();drawAll();}catch(e){console.error(e);setError("❌ Falha ao atualizar dados");}
-  });
-  document.getElementById('download').addEventListener('click',()=>{
-    const s=document.getElementById('start').value||null,e=document.getElementById('end').value||null;
-    const D=filterData(s,e);let csv="date,CRC,Iron,Freight,USD/BRL,USD/CNY\n";
-    for(let i=0;i<D.date.length;i++){csv+=`${D.date[i]},${D.crc[i]??""},${D.iron[i]??""},${D.freight[i]??""},${D.usdbrl[i]??""},${D.usdcny[i]??""}\n`;}
-    const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});const a=document.createElement('a');
-    a.href=URL.createObjectURL(blob);a.download='indices_moveleiro_filtrado.csv';a.click();
-  });
-}
-function setBusy(m){document.getElementById('status').innerText=m;}
-function clearBusy(){document.getElementById('status').innerText='';}
-function setError(m){document.getElementById('status').innerText=m;}
-function initDateInputs(){
-  if(!RAW||!RAW.date.length)return;
-  const s=document.getElementById('start'),e=document.getElementById('end');
-  s.min=RAW.date[0];s.max=RAW.date.at(-1);e.min=RAW.date[0];e.max=RAW.date.at(-1);
-  s.value=RAW.date[0];e.value=RAW.date.at(-1);
-}
-(async function boot(){
-  try{
-    setBusy("Carregando dados…");
-    RAW=await loadCSV();
-    initDateInputs();
-    wireUI();
-    clearBusy();
-    drawAll();
-  }catch(e){console.error(e);setError("❌ Falha ao carregar dados");}
-})();
+function wireUI(){document.getElementById("apply").addEventListener("click",()=>drawAll(document.getElementById("start").value||null,document.getElementById("end").value||null));
+document.getElementById("refresh").addEventListener("click",async()=>{setBusy("Atualizando…");RAW=await loadCSV();initDates();clearBusy();drawAll();});
+document.getElementById("download").addEventListener("click",()=>{const D=filterData(),csv=["date,CRC,Iron,Freight,USD/BRL,USD/CNY"];for(let i=0;i<D.date.length;i++)csv.push([D.date[i],D.crc[i],D.iron[i],D.freight[i],D.usdbrl[i],D.usdcny[i]].join(","));const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([csv.join("\n")],{type:"text/csv"}));a.download="indices_moveleiro_filtrado.csv";a.click();});}
+function setBusy(t){document.getElementById("status").innerText=t;}
+function clearBusy(){document.getElementById("status").innerText="";}
+function initDates(){const s=document.getElementById("start"),e=document.getElementById("end");s.min=RAW.date[0];e.max=RAW.date.at(-1);s.value=RAW.date[0];e.value=RAW.date.at(-1);}
+(async()=>{setBusy("Carregando dados…");RAW=await loadCSV();initDates();wireUI();clearBusy();drawAll();})();
 </script>
 </body>
 </html>
