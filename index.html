@@ -2,7 +2,7 @@
 <html lang="pt-br">
 <head>
 <meta charset="utf-8"/>
-<title>Índices Moveleiro — Dashboard v4.6</title>
+<title>Índices Moveleiro — Dashboard v4.7</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 
 <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
@@ -54,7 +54,7 @@ section{margin-bottom:18px}
   background:var(--card);box-shadow:var(--shadow);border-radius:0 0 10px 10px;padding:14px;
 }
 
-/* Range + info row */
+/* Range + inline info */
 .rangebar{
   display:flex; gap:8px; flex-wrap:wrap; align-items:center;
   margin: 6px 0 10px
@@ -64,18 +64,18 @@ section{margin-bottom:18px}
   padding:6px 12px; border-radius:10px; font-weight:600; cursor:pointer; font-size:14px;
 }
 .rbtn.active, .rbtn:hover{background:#000;color:#fff;border-color:#000}
-.info-right{margin-left:auto; display:flex; gap:12px; align-items:center}
-.info-text{font-size:12px; color:#111}
+.info-inline{margin-left:auto; font-size:12px; color:#111; white-space:nowrap}
 
 /* Charts: desktop 480px, mobile 460px */
 #chartGeral{width:100%;height:480px}
 .chart{width:100%;height:480px}
 
-/* Summaries for non-Geral sections */
+/* Summaries */
 .summary-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:12px}
 .year-block{background:#f8f9fb;border-left:6px solid var(--accent);padding:10px 14px;border-radius:8px;box-shadow:var(--shadow)}
 .year-title{font-weight:600;margin-bottom:6px;color:#222}
 .year-block ul{list-style:none;padding-left:0;margin:0}
+.year-block li{margin:2px 0}
 .last-month{grid-column:1/-1;margin-top:10px;color:#111;font-weight:600}
 
 /* Mobile */
@@ -86,13 +86,14 @@ section{margin-bottom:18px}
   .summary-grid{grid-template-columns:1fr}
   .year-block,.last-month{font-size:13px}
   .header{flex-wrap:wrap; gap:8px}
+  .info-inline{white-space:normal}
 }
 </style>
 </head>
 <body>
 
 <div class="header">
-  <div class="title">Índices Moveleiro <span style="opacity:.7">v4.6</span></div>
+  <div class="title">Índices Moveleiro <span style="opacity:.7">v4.7</span></div>
   <div class="meta" id="lastUpdateHeader">Última atualização: —</div>
   <div class="spacer"></div>
   <button class="btn" id="btnExportAll">Exportar PDF</button>
@@ -111,12 +112,9 @@ section{margin-bottom:18px}
         <button class="rbtn" data-range="1A">1A</button>
         <button class="rbtn" data-range="5A">5A</button>
         <button class="rbtn active" data-range="Tudo">Tudo</button>
-        <div class="info-right">
-          <span id="lastUpdate" class="info-text"></span>
-        </div>
+        <!-- No "Última atualização" here anymore -->
       </div>
       <div id="chartGeral"></div>
-      <!-- No summaries under Visão Geral -->
     </div>
   </div>
 </section>
@@ -133,9 +131,7 @@ section{margin-bottom:18px}
         <button class="rbtn" data-range="1A">1A</button>
         <button class="rbtn" data-range="5A">5A</button>
         <button class="rbtn active" data-range="Tudo">Tudo</button>
-        <div class="info-right">
-          <span id="var-crc" class="info-text">Variação: —</span>
-        </div>
+        <span id="info-crc" class="info-inline">Tudo  -  Variação: —</span>
       </div>
       <div id="chartCRC" class="chart"></div>
       <div id="summaryCRC" class="summary-grid"></div>
@@ -155,9 +151,7 @@ section{margin-bottom:18px}
         <button class="rbtn" data-range="1A">1A</button>
         <button class="rbtn" data-range="5A">5A</button>
         <button class="rbtn active" data-range="Tudo">Tudo</button>
-        <div class="info-right">
-          <span id="var-iron" class="info-text">Variação: —</span>
-        </div>
+        <span id="info-iron" class="info-inline">Tudo  -  Variação: —</span>
       </div>
       <div id="chartIron" class="chart"></div>
       <div id="summaryIron" class="summary-grid"></div>
@@ -177,9 +171,7 @@ section{margin-bottom:18px}
         <button class="rbtn" data-range="1A">1A</button>
         <button class="rbtn" data-range="5A">5A</button>
         <button class="rbtn active" data-range="Tudo">Tudo</button>
-        <div class="info-right">
-          <span id="var-freight" class="info-text">Variação: —</span>
-        </div>
+        <span id="info-freight" class="info-inline">Tudo  -  Variação: —</span>
       </div>
       <div id="chartFreight" class="chart"></div>
       <div id="summaryFreight" class="summary-grid"></div>
@@ -199,9 +191,7 @@ section{margin-bottom:18px}
         <button class="rbtn" data-range="1A">1A</button>
         <button class="rbtn" data-range="5A">5A</button>
         <button class="rbtn active" data-range="Tudo">Tudo</button>
-        <div class="info-right">
-          <span id="var-fx" class="info-text">Variação: —</span>
-        </div>
+        <span id="info-fx" class="info-inline">Tudo  -  Variação: USD/BRL — | USD/CNY —</span>
       </div>
       <div id="chartFX" class="chart"></div>
       <div id="summaryFX" class="summary-grid"></div>
@@ -274,14 +264,19 @@ function quarterChanges(dates, vals){
   }
   return out;
 }
-function lastMonthLine(dates, vals){
+function quarterChangesPair(dates, v1, v2){
+  return { a: quarterChanges(dates, v1), b: quarterChanges(dates, v2) };
+}
+
+function lastMonthLineFX(dates, v1, v2){
   if(dates.length<2) return "";
   const d1=new Date(dates.at(-2)), d2=new Date(dates.at(-1));
-  const v1=vals.at(-2), v2=vals.at(-1); if(!v1||!v2) return "";
-  const pct=((v2-v1)/v1*100);
-  const txt=(pct>=0?"+":"")+pct.toFixed(1).replace(".",",")+" %";
-  return `Último mês (${PT_ABBR[d1.getMonth()]} – ${PT_ABBR[d2.getMonth()]} ${d2.getFullYear()}): ${txt}`;
+  const a1=v1.at(-2), a2=v1.at(-1); const b1=v2.at(-2), b2=v2.at(-1);
+  if(a1==null||a2==null||b1==null||b2==null) return "";
+  const pa=((a2-a1)/a1*100), pb=((b2-b1)/b1*100);
+  return `Último mês (${PT_ABBR[d1.getMonth()]} – ${PT_ABBR[d2.getMonth()]} ${d2.getFullYear()}):<br/>USD/BRL: ${(pa>=0?"+":"")+pa.toFixed(1).replace(".",",")} %<br/>USD/CNY: ${(pb>=0?"+":"")+pb.toFixed(1).replace(".",",")} %`;
 }
+
 function renderSummary(containerId, qData, dates, vals){
   const el=document.getElementById(containerId); if(!el) return;
   const yrs=Object.keys(qData).map(Number).sort((a,b)=>b-a);
@@ -290,7 +285,31 @@ function renderSummary(containerId, qData, dates, vals){
   const block=y=>`<div class='year-block'><div class='year-title'>${y}</div><ul>${
     [1,2,3,4].map(q=>`<li>${q}º trimestre: ${fmt((qData[y]||{})[q])}</li>`).join("")
   }</ul></div>`;
-  el.innerHTML = `${block(y1)}${block(y2)}<div class='last-month'>${lastMonthLine(dates,vals)}</div>`;
+  const last = (function(){
+    if(dates.length<2) return "";
+    const d1=new Date(dates.at(-2)), d2=new Date(dates.at(-1));
+    const v1=vals.at(-2), v2=vals.at(-1); if(v1==null||v2==null) return "";
+    const pct=((v2-v1)/v1*100); const t=(pct>=0?"+":"")+pct.toFixed(1).replace(".",",")+" %";
+    return `Último mês (${PT_ABBR[d1.getMonth()]} – ${PT_ABBR[d2.getMonth()]} ${d2.getFullYear()}): ${t}`;
+  })();
+  el.innerHTML = `${block(y1)}${block(y2)}<div class='last-month'>${last}</div>`;
+}
+
+function renderSummaryFX(containerId, dates, usdbrl, usdcny){
+  const el=document.getElementById(containerId); if(!el) return;
+  const {a:Qb, b:Qc} = quarterChangesPair(dates, usdbrl, usdcny);
+  const yrs=Array.from(new Set(dates.map(d=>new Date(d).getFullYear()))).sort((a,b)=>b-a);
+  const [y1,y2]=yrs.length>=2?[yrs[0],yrs[1]]:[yrs[0],yrs[0]];
+  const fmt=v=>v==null?"n/d":(v>=0?"+":"")+v.toFixed(1).replace(".",",")+" %";
+  function block(y){
+    const qb=Qb[y]||{}, qc=Qc[y]||{};
+    const lines=[1,2,3,4].map(q=>(
+      `<li>${q}º trimestre:<br/>  USD/BRL: ${fmt(qb[q])}<br/>  USD/CNY: ${fmt(qc[q])}</li>`
+    )).join("");
+    return `<div class='year-block'><div class='year-title'>${y}</div><ul>${lines}</ul></div>`;
+  }
+  const last = lastMonthLineFX(dates, usdbrl, usdcny);
+  el.innerHTML = `${block(y1)}${block(y2)}<div class='last-month'>${last}</div>`;
 }
 
 const RANGES = {geral:"Tudo", crc:"Tudo", iron:"Tudo", freight:"Tudo", fx:"Tudo"};
@@ -314,24 +333,33 @@ function axisLayout(baseTitle, xticks){
     margin:{t:40,r:30,b:80,l:60}
   };
 }
-
 function formatPct(p){ return (p>=0?"+":"")+p.toFixed(1).replace(".",",")+" %"; }
-function updateVariation(key){
-  let arr=null;
-  if(key==='crc') arr=RAW.crc;
-  if(key==='iron') arr=RAW.iron;
-  if(key==='freight') arr=RAW.freight;
-  if(key==='fx') arr=RAW.usdbrl;
-  if(!arr) return;
+
+function updateVariationSingle(key, labelId, series){
   const months = RANGE_TO_MONTHS[RANGES[key]];
-  const sliced = sliceByMonths(RAW.date, {[key]:arr}, months);
+  const sliced = sliceByMonths(RAW.date, {[key]:series}, months);
   const y = sliced[key];
   const first = y.find(v=>v!=null);
   const last  = [...y].reverse().find(v=>v!=null);
-  const el = document.getElementById(`var-${key}`);
-  if(!el || first==null || last==null){ if(el) el.textContent="Variação: —"; return; }
+  const el = document.getElementById(labelId);
+  if(!el || first==null || last==null){ if(el) el.textContent=`${RANGES[key]}  -  Variação: —`; return; }
   const pct = (last-first)/first*100;
-  el.textContent = `Variação: ${formatPct(pct)}`;
+  el.textContent = `${RANGES[key]}  -  Variação: ${formatPct(pct)}`;
+}
+
+function updateVariationFX(){
+  const months = RANGE_TO_MONTHS[RANGES.fx];
+  const sliced = sliceByMonths(RAW.date, {usdbrl:RAW.usdbrl, usdcny:RAW.usdcny}, months);
+  const a = sliced.usdbrl, b = sliced.usdcny;
+  const aF = a.find(v=>v!=null), aL = [...a].reverse().find(v=>v!=null);
+  const bF = b.find(v=>v!=null), bL = [...b].reverse().find(v=>v!=null);
+  const el = document.getElementById('info-fx');
+  if(!el || aF==null || aL==null || bF==null || bL==null){
+    if(el) el.textContent = `${RANGES.fx}  -  Variação: USD/BRL — | USD/CNY —`;
+    return;
+  }
+  const pa=(aL-aF)/aF*100, pb=(bL-bF)/bF*100;
+  el.textContent = `${RANGES.fx}  -  Variação: USD/BRL ${formatPct(pa)} | USD/CNY ${formatPct(pb)}`;
 }
 
 function drawGeral(){
@@ -339,13 +367,11 @@ function drawGeral(){
   const sliced = sliceByMonths(RAW.date, {crc:RAW.crc, iron:RAW.iron, freight:RAW.freight, usdbrl:RAW.usdbrl, usdcny:RAW.usdcny}, m);
   const D = {date:sliced.dates, ...sliced};
   const {tickvals,ticktext}=evenMonthTicksWithYear(D.date);
-  const lastHeader=document.getElementById('lastUpdateHeader');
-  const lastBadge=document.getElementById('lastUpdate');
   if (RAW.date.length){
     const dt=new Date(RAW.date.at(-1));
     const txt=`Última atualização: ${dt.toLocaleDateString('pt-BR',{day:'2-digit',month:'short',year:'numeric'})}`;
+    const lastHeader=document.getElementById('lastUpdateHeader');
     if (lastHeader) lastHeader.textContent = txt;
-    if (lastBadge) lastBadge.textContent = txt;
   }
   Plotly.newPlot('chartGeral',[
     {x:D.date,y:D.crc,name:'Aço CRC China (USD/TON)',...lineCfg('#007bff')},
@@ -368,7 +394,7 @@ function drawCRC(){
     {x:D.date,y:D.y,name:'Aço CRC China (USD/TON)',...lineCfg('#007bff')}
   ], axisLayout('USD/TON', {tickvals, ticktext}), {responsive:true});
   renderSummary('summaryCRC', quarterChanges(RAW.date, RAW.crc), RAW.date, RAW.crc);
-  updateVariation('crc');
+  updateVariationSingle('crc','info-crc', RAW.crc);
 }
 
 function drawIron(){
@@ -380,7 +406,7 @@ function drawIron(){
     {x:D.date,y:D.y,name:'Minério de Ferro (USD/TON)',...lineCfg('#ff6f00')}
   ], axisLayout('USD/TON', {tickvals, ticktext}), {responsive:true});
   renderSummary('summaryIron', quarterChanges(RAW.date, RAW.iron), RAW.date, RAW.iron);
-  updateVariation('iron');
+  updateVariationSingle('iron','info-iron', RAW.iron);
 }
 
 function drawFreight(){
@@ -392,7 +418,7 @@ function drawFreight(){
     {x:D.date,y:D.y,name:'Frete Marítimo (USD/TEU)',...lineCfg('#00bfa6')}
   ], axisLayout('USD/TEU', {tickvals, ticktext}), {responsive:true});
   renderSummary('summaryFreight', quarterChanges(RAW.date, RAW.freight), RAW.date, RAW.freight);
-  updateVariation('freight');
+  updateVariationSingle('freight','info-freight', RAW.freight);
 }
 
 function drawFX(){
@@ -410,8 +436,8 @@ function drawFX(){
     yaxis:{...axisLayout('').yaxis, title:'USD/BRL', range:[minB*0.98, maxB*1.02]},
     yaxis2:{title:'USD/CNY', overlaying:'y', side:'right', range:[minC*0.98, maxC*1.02], tickfont:{size:isMobile()?10:12}, automargin:true}
   }, {responsive:true});
-  renderSummary('summaryFX', quarterChanges(RAW.date, RAW.usdbrl), RAW.date, RAW.usdbrl);
-  updateVariation('fx');
+  renderSummaryFX('summaryFX', RAW.date, RAW.usdbrl, RAW.usdcny);
+  updateVariationFX();
 }
 
 function setExpanded(cardWrap, caretEl, expand){
@@ -470,7 +496,12 @@ function initRanges(){
       const btn = e.target.closest('.rbtn');
       if(!btn) return;
       const sel = btn.dataset.range;
-      if(sel){ RANGES[key] = sel; setRangeActive(rid, sel); drawer(); if(key!=='geral') updateVariation(key); }
+      if(sel){ RANGES[key] = sel; setRangeActive(rid, sel); drawer();
+        if(key==='crc') updateVariationSingle('crc','info-crc', RAW.crc);
+        if(key==='iron') updateVariationSingle('iron','info-iron', RAW.iron);
+        if(key==='freight') updateVariationSingle('freight','info-freight', RAW.freight);
+        if(key==='fx') updateVariationFX();
+      }
     });
   });
 }
