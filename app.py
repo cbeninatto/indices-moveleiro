@@ -66,7 +66,7 @@ if run_btn:
         st.stop()
 
     st.success(f"Extraído: {len(crc_df)} linhas de CRC China.")
-    st.dataframe(crc_df, use_container_width=True)
+    st.dataframe(crc_df, width="stretch")
 
     dates = crc_df["date"].tolist()
 
@@ -114,7 +114,7 @@ if run_btn:
     df.to_csv(csv_path, index=False, encoding="utf-8-sig")
 
     st.success("CSV gerado (Sea_Freight_USD_ton em branco para preencher manualmente).")
-    st.dataframe(df, use_container_width=True)
+    st.dataframe(df, width="stretch")
 
     with open(csv_path, "rb") as f:
         st.download_button("Download CSV", f, file_name="indices_moveleiro.csv", mime="text/csv")
