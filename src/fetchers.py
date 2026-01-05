@@ -1,26 +1,35 @@
+# src/fetchers.py
+import io
 import time
 import requests
 import pandas as pd
-from datetime import date, datetime, timedelta
+import numpy as np
+from datetime import date, timedelta
+
 
 def _to_datestr_iso(d: date) -> str:
     return d.strftime("%Y-%m-%d")
 
+
 def _to_bcb_mmddyyyy(d: date) -> str:
     return d.strftime("%m-%d-%Y")
 
+
 def _nearest_prev_business_day(d: date) -> date:
-    # se cair no fim de semana, volta para sexta
     while d.weekday() >= 5:
         d = d - timedelta(days=1)
     return d
+
 
 def fetch_ptax_usdbrl_buy_for_dates(dates: list[date]) -> pd.DataFrame:
     """
     BCB Olinda PTAX - CotacaoDolarDia -> cotacaoCompra
     Se não houver cotação na data (feriado/fim de semana), busca o dia útil anterior.
     """
-    base = "https://olinda.bcb.gov.br/olinda/servico/PTAX/versao/v1/odata/CotacaoDolarDia(dataCotacao=@dataCotacao)"
+    base = (
+        "https://olinda.bcb.gov.br/olinda/servico/PTAX/versao/v1/odata/"
+        "CotacaoDolarDia(dataCotacao=@dataCotacao)"
+    )
 
     out = []
     session = requests.Session()
@@ -45,13 +54,13 @@ def fetch_ptax_usdbrl_buy_for_dates(dates: list[date]) -> pd.DataFrame:
                 out.append({"date": d, "USD/BRL": float(values[0]["cotacaoCompra"])})
                 ok = True
                 break
-            # se não achou, volta mais um dia
             dd = dd - timedelta(days=1)
 
         if not ok:
             out.append({"date": d, "USD/BRL": None})
 
     return pd.DataFrame(out)
+
 
 def fetch_fred_series_for_dates(dates: list[date], fred_key: str, series_id: str = "DEXCHUS") -> pd.DataFrame:
     """
@@ -103,90 +112,51 @@ def fetch_fred_series_for_dates(dates: list[date], fred_key: str, series_id: str
 
     return pd.DataFrame(out)
 
-def fetch_tradingeconomics_iron_ore_for_dates(dates: list[date], te_key: str) -> pd.DataFrame:
+
+# ✅ NEW: Iron Ore from uploaded CSV (uses first two columns only: Date & Price)
+def load_iron_ore_from_csv_for_dates(uploaded_file, dates: list[date]) -> pd.DataFrame:
     """
-    TradingEconomics: tenta endpoints comuns e se adapta à estrutura do JSON.
-    Objetivo: obter uma série diária e mapear para as datas (ou último dia anterior com dado).
+    Reads uploaded Iron Ore CSV and returns:
+      date (CRC dates) + Iron Ore (USD/TON)
+
+    Uses only the first 2 columns of the CSV: Date and Price.
+    If the exact date is missing, uses nearest previous available date (up to 30 days).
     """
-    start = min(dates)
-    end = max(dates)
+    content = uploaded_file.getvalue()
+    df = pd.read_csv(io.BytesIO(content))
 
-    # Tentativas de endpoint (TE muda bastante conforme plano/rota).
-    candidates = [
-        # histórico commodity (alguns planos):
-        ("https://api.tradingeconomics.com/historical/commodity/iron%20ore", {"c": te_key, "d1": _to_datestr_iso(start - timedelta(days=10)), "d2": _to_datestr_iso(end)}),
-        # markets historical commodity:
-        ("https://api.tradingeconomics.com/markets/historical/commodity/iron%20ore", {"c": te_key, "d1": _to_datestr_iso(start - timedelta(days=10)), "d2": _to_datestr_iso(end)}),
-        # markets commodity snapshot (fallback: pode não ter histórico):
-        ("https://api.tradingeconomics.com/markets/commodity/iron%20ore", {"c": te_key}),
-        ("https://api.tradingeconomics.com/markets/commodities/iron%20ore", {"c": te_key}),
-    ]
+    if df.shape[1] < 2:
+        return pd.DataFrame({"date": dates, "Iron Ore (USD/TON)": [np.nan] * len(dates)})
 
-    session = requests.Session()
-    series = []
+    dcol = df.columns[0]
+    pcol = df.columns[1]
 
-    last_err = None
-    for url, params in candidates:
-        try:
-            r = session.get(url, params=params, timeout=30)
-            r.raise_for_status()
-            js = r.json()
+    tmp = df[[dcol, pcol]].copy()
+    tmp.columns = ["Date", "Price"]
 
-            # Normalmente vem lista de dicts. Precisamos de Date + Value/Close/Last.
-            if isinstance(js, dict) and "data" in js:
-                js = js["data"]
-            if not isinstance(js, list):
-                continue
+    tmp["Date"] = pd.to_datetime(tmp["Date"], errors="coerce", dayfirst=False)
+    tmp["Price"] = pd.to_numeric(tmp["Price"], errors="coerce")
 
-            tmp = []
-            for it in js:
-                if not isinstance(it, dict):
-                    continue
+    tmp = tmp.dropna(subset=["Date", "Price"])
+    tmp["Date"] = tmp["Date"].dt.date
+    tmp = tmp.sort_values("Date")
 
-                # variações de campo:
-                ds = it.get("Date") or it.get("date") or it.get("Datetime") or it.get("LastUpdate")
-                val = it.get("Value") or it.get("value") or it.get("Close") or it.get("close") or it.get("Last") or it.get("last")
+    if tmp.empty:
+        return pd.DataFrame({"date": dates, "Iron Ore (USD/TON)": [np.nan] * len(dates)})
 
-                # em alguns endpoints, "Last" vem e "Date" não.
-                if ds is None:
-                    continue
-                try:
-                    d = pd.to_datetime(str(ds)).date()
-                except Exception:
-                    continue
-
-                try:
-                    if val is None:
-                        continue
-                    v = float(str(val).replace(",", ""))
-                except Exception:
-                    continue
-
-                tmp.append((d, v))
-
-            if tmp:
-                series = tmp
-                break
-
-        except Exception as e:
-            last_err = e
-            continue
-
-    if not series:
-        # sem dados -> coluna vazia
-        return pd.DataFrame({"date": dates, "Iron Ore (USD/TON)": [None] * len(dates)})
-
-    ser = pd.Series({d: v for d, v in series}).sort_index()
+    # If there are duplicate dates, keep the last one
+    tmp = tmp.groupby("Date", as_index=True)["Price"].last().sort_index()
+    ser = tmp  # Series indexed by date
 
     out = []
     for d in dates:
         dd = d
-        v = None
-        for _ in range(20):
+        val = None
+        for _ in range(30):
             if dd in ser.index:
-                v = float(ser.loc[dd])
+                val = float(ser.loc[dd])
                 break
             dd = dd - timedelta(days=1)
-        out.append({"date": d, "Iron Ore (USD/TON)": v})
+        out.append({"date": d, "Iron Ore (USD/TON)": val})
 
     return pd.DataFrame(out)
