@@ -14,7 +14,7 @@ st.set_page_config(page_title="Índices Moveleiro", layout="wide")
 
 st.title("Índices Moveleiro — Gerador de CSV (CRC + Iron Ore + FX)")
 
-# Read FRED config from Streamlit Secrets (no manual key input)
+# FRED config via Streamlit Secrets
 fred_key = st.secrets.get("FRED_API_KEY", "")
 fred_series = st.secrets.get("FRED_SERIES_USD_CNY", "DEXCHUS")
 
@@ -86,29 +86,37 @@ if run_btn:
         .merge(usdcny, on="date", how="left")
     )
 
-    # ✅ Rename to match required output columns EXACTLY
-    df = df.rename(columns={
-        "CRC Steel China (USD/TON)": "CRC_China_USD_ton",
-        "Iron Ore (USD/TON)": "Iron_Ore_USD_ton",
-        "USD/BRL": "USD_BRL_buy",
-        "USD/CNY": "USD_CNY",
-    })
+    # Rename to match required output columns EXACTLY
+    df = df.rename(
+        columns={
+            "CRC Steel China (USD/TON)": "CRC_China_USD_ton",
+            "Iron Ore (USD/TON)": "Iron_Ore_USD_ton",
+            "USD/BRL": "USD_BRL_buy",
+            "USD/CNY": "USD_CNY",
+        }
+    )
 
-    # ✅ Add Sea Freight column blank (manual input later)
+    # Add Sea Freight column blank (manual input later)
     df["Sea_Freight_USD_ton"] = ""
 
-    # ✅ Keep only required columns and order
-    df = df[[
-        "date",
-        "CRC_China_USD_ton",
-        "Iron_Ore_USD_ton",
-        "Sea_Freight_USD_ton",
-        "USD_BRL_buy",
-        "USD_CNY",
-    ]].copy()
+    # Keep only required columns and order
+    df = df[
+        [
+            "date",
+            "CRC_China_USD_ton",
+            "Iron_Ore_USD_ton",
+            "Sea_Freight_USD_ton",
+            "USD_BRL_buy",
+            "USD_CNY",
+        ]
+    ].copy()
 
-    # Ensure date format is consistent
-    df["date"] = pd.to_datetime(df["date"]).dt.strftime("%-m/%-d/%Y") if os.name != "nt" else pd.to_datetime(df["date"]).dt.strftime("%#m/%#d/%Y")
+    # Date format: M/D/YYYY (same style as your existing datasets)
+    dt = pd.to_datetime(df["date"])
+    if os.name == "nt":
+        df["date"] = dt.dt.strftime("%#m/%#d/%Y")
+    else:
+        df["date"] = dt.dt.strftime("%-m/%-d/%Y")
 
     csv_path = os.path.join(output_dir, "indices_moveleiro.csv")
     df.to_csv(csv_path, index=False, encoding="utf-8-sig")
@@ -117,4 +125,9 @@ if run_btn:
     st.dataframe(df, width="stretch")
 
     with open(csv_path, "rb") as f:
-        st.download_button("Download CSV", f, file_name="indices_moveleiro.csv", mime="text/csv")
+        st.download_button(
+            "Download CSV",
+            f,
+            file_name="indices_moveleiro.csv",
+            mime="text/csv",
+        )
