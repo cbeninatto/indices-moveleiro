@@ -113,7 +113,6 @@ def fetch_fred_series_for_dates(dates: list[date], fred_key: str, series_id: str
     return pd.DataFrame(out)
 
 
-# ✅ NEW: Iron Ore from uploaded CSV (uses first two columns only: Date & Price)
 def load_iron_ore_from_csv_for_dates(uploaded_file, dates: list[date]) -> pd.DataFrame:
     """
     Reads uploaded Iron Ore CSV and returns:
@@ -144,9 +143,8 @@ def load_iron_ore_from_csv_for_dates(uploaded_file, dates: list[date]) -> pd.Dat
     if tmp.empty:
         return pd.DataFrame({"date": dates, "Iron Ore (USD/TON)": [np.nan] * len(dates)})
 
-    # If there are duplicate dates, keep the last one
     tmp = tmp.groupby("Date", as_index=True)["Price"].last().sort_index()
-    ser = tmp  # Series indexed by date
+    ser = tmp
 
     out = []
     for d in dates:
