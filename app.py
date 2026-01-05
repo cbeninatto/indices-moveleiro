@@ -7,17 +7,14 @@ from src.extract_crc import extract_crc_china_page12
 from src.fetchers import (
     fetch_ptax_usdbrl_buy_for_dates,
     fetch_fred_series_for_dates,
-    load_iron_ore_from_csv_for_dates,  # ✅ NEW
+    load_iron_ore_from_csv_for_dates,
 )
-from src.analytics import build_enriched_metrics
-from src.dashboard_html import build_dashboard_html
-from src.report_pdf import build_pdf_report
 
 st.set_page_config(page_title="Índices Moveleiro", layout="wide")
 
-st.title("Índices Moveleiro — Atualização automática via SteelBenchmarker")
+st.title("Índices Moveleiro — Gerador de CSV (CRC + Iron Ore + FX)")
 
-# ✅ NEW: Read FRED config from Streamlit Secrets (no manual key input)
+# Read FRED config from Streamlit Secrets (no manual key input)
 fred_key = st.secrets.get("FRED_API_KEY", "")
 fred_series = st.secrets.get("FRED_SERIES_USD_CNY", "DEXCHUS")
 
@@ -35,7 +32,6 @@ with st.expander("Configurações (APIs)", expanded=True):
 st.write("### 1) Upload do SteelBenchmarker history.pdf")
 pdf_file = st.file_uploader("Envie o PDF", type=["pdf"])
 
-# ✅ NEW: Upload Iron Ore CSV (Date + Price)
 st.write("### 2) Upload do CSV de Minério de Ferro (Date + Price)")
 iron_csv = st.file_uploader(
     "Envie o CSV do Iron Ore (somente as 2 primeiras colunas serão usadas: Date e Price)",
@@ -43,7 +39,7 @@ iron_csv = st.file_uploader(
 )
 
 colA, colB, colC = st.columns([1, 1, 2])
-run_btn = colA.button("Gerar CSV + HTML + PDF", type="primary", use_container_width=True)
+run_btn = colA.button("Gerar CSV", type="primary", use_container_width=True)
 
 output_dir = "output"
 os.makedirs(output_dir, exist_ok=True)
@@ -74,7 +70,6 @@ if run_btn:
 
     dates = crc_df["date"].tolist()
 
-    # ✅ NEW: Iron Ore from uploaded CSV
     st.info("Lendo CSV de Minério de Ferro e mapeando para as datas do CRC...")
     iron = load_iron_ore_from_csv_for_dates(iron_csv, dates)
 
@@ -91,34 +86,35 @@ if run_btn:
         .merge(usdcny, on="date", how="left")
     )
 
-    # Enrich metrics
-    st.info("Calculando variações e métricas (YoY, 6M, 3M, 1M, correlações, volatilidade)...")
-    enriched = build_enriched_metrics(df)
+    # ✅ Rename to match required output columns EXACTLY
+    df = df.rename(columns={
+        "CRC Steel China (USD/TON)": "CRC_China_USD_ton",
+        "Iron Ore (USD/TON)": "Iron_Ore_USD_ton",
+        "USD/BRL": "USD_BRL_buy",
+        "USD/CNY": "USD_CNY",
+    })
+
+    # ✅ Add Sea Freight column blank (manual input later)
+    df["Sea_Freight_USD_ton"] = ""
+
+    # ✅ Keep only required columns and order
+    df = df[[
+        "date",
+        "CRC_China_USD_ton",
+        "Iron_Ore_USD_ton",
+        "Sea_Freight_USD_ton",
+        "USD_BRL_buy",
+        "USD_CNY",
+    ]].copy()
+
+    # Ensure date format is consistent
+    df["date"] = pd.to_datetime(df["date"]).dt.strftime("%-m/%-d/%Y") if os.name != "nt" else pd.to_datetime(df["date"]).dt.strftime("%#m/%#d/%Y")
 
     csv_path = os.path.join(output_dir, "indices_moveleiro.csv")
-    enriched.to_csv(csv_path, index=False, encoding="utf-8-sig")
+    df.to_csv(csv_path, index=False, encoding="utf-8-sig")
 
-    st.success("CSV gerado.")
+    st.success("CSV gerado (Sea_Freight_USD_ton em branco para preencher manualmente).")
+    st.dataframe(df, use_container_width=True)
+
     with open(csv_path, "rb") as f:
         st.download_button("Download CSV", f, file_name="indices_moveleiro.csv", mime="text/csv")
-
-    st.info("Gerando dashboard HTML...")
-    html_path = os.path.join(output_dir, "Indices_Moveleiro.html")
-    html_str = build_dashboard_html(enriched, title="Índices Moveleiro")
-    with open(html_path, "w", encoding="utf-8") as f:
-        f.write(html_str)
-
-    st.success("HTML gerado.")
-    with open(html_path, "rb") as f:
-        st.download_button("Download HTML", f, file_name="Indices_Moveleiro.html", mime="text/html")
-
-    st.info("Gerando PDF...")
-    pdf_out_path = os.path.join(output_dir, "Indices_Moveleiro.pdf")
-    build_pdf_report(enriched, pdf_out_path, title="Índices Moveleiro")
-
-    st.success("PDF gerado.")
-    with open(pdf_out_path, "rb") as f:
-        st.download_button("Download PDF", f, file_name="Indices_Moveleiro.pdf", mime="application/pdf")
-
-    st.write("### Prévia (HTML)")
-    st.components.v1.html(html_str, height=800, scrolling=True)
