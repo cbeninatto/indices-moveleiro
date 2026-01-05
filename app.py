@@ -1,5 +1,5 @@
+# app.py
 import os
-import io
 import streamlit as st
 import pandas as pd
 
@@ -7,7 +7,7 @@ from src.extract_crc import extract_crc_china_page12
 from src.fetchers import (
     fetch_ptax_usdbrl_buy_for_dates,
     fetch_fred_series_for_dates,
-    fetch_tradingeconomics_iron_ore_for_dates,
+    load_iron_ore_from_csv_for_dates,  # ✅ NEW
 )
 from src.analytics import build_enriched_metrics
 from src.dashboard_html import build_dashboard_html
@@ -17,25 +17,30 @@ st.set_page_config(page_title="Índices Moveleiro", layout="wide")
 
 st.title("Índices Moveleiro — Atualização automática via SteelBenchmarker")
 
-with st.expander("Configurações (API Keys)", expanded=True):
-    te_key = st.text_input(
-        "TradingEconomics API key (formato: key:secret)",
-        type="password",
-        help="Ex.: 64fc7f0aa17342b:ol58q6kluvt8wzq",
-    )
-    fred_key = st.text_input(
-        "FRED API key",
-        type="password",
-        help="Ex.: ad784c52fd69540eb22d2baa17160fa4",
-    )
-    fred_series = st.text_input(
-        "FRED series_id para USD/CNY",
-        value="DEXCHUS",
-        help="DEXCHUS = Chinese Yuan per US Dollar (CNY/USD).",
-    )
+# ✅ NEW: Read FRED config from Streamlit Secrets (no manual key input)
+fred_key = st.secrets.get("FRED_API_KEY", "")
+fred_series = st.secrets.get("FRED_SERIES_USD_CNY", "DEXCHUS")
+
+with st.expander("Configurações (APIs)", expanded=True):
+    st.write("**FRED (USD/CNY)**: lido automaticamente via *Secrets* do Streamlit Cloud.")
+    st.caption("Configure em Settings → Secrets:")
+    st.code('FRED_API_KEY = "SUA_CHAVE"\nFRED_SERIES_USD_CNY = "DEXCHUS"', language="toml")
+
+    if not fred_key:
+        st.error("FRED_API_KEY não encontrado em Secrets. Configure em Settings → Secrets.")
+        st.stop()
+    else:
+        st.success(f"FRED configurado via Secrets ✅  (série: {fred_series})")
 
 st.write("### 1) Upload do SteelBenchmarker history.pdf")
 pdf_file = st.file_uploader("Envie o PDF", type=["pdf"])
+
+# ✅ NEW: Upload Iron Ore CSV (Date + Price)
+st.write("### 2) Upload do CSV de Minério de Ferro (Date + Price)")
+iron_csv = st.file_uploader(
+    "Envie o CSV do Iron Ore (somente as 2 primeiras colunas serão usadas: Date e Price)",
+    type=["csv"],
+)
 
 colA, colB, colC = st.columns([1, 1, 2])
 run_btn = colA.button("Gerar CSV + HTML + PDF", type="primary", use_container_width=True)
@@ -48,12 +53,8 @@ if run_btn:
         st.error("Envie um PDF primeiro.")
         st.stop()
 
-    if not te_key:
-        st.error("Informe a API key do TradingEconomics.")
-        st.stop()
-
-    if not fred_key:
-        st.error("Informe a API key do FRED.")
+    if not iron_csv:
+        st.error("Envie também o CSV de Minério de Ferro (Date + Price).")
         st.stop()
 
     # Save uploaded PDF to disk
@@ -73,19 +74,22 @@ if run_btn:
 
     dates = crc_df["date"].tolist()
 
+    # ✅ NEW: Iron Ore from uploaded CSV
+    st.info("Lendo CSV de Minério de Ferro e mapeando para as datas do CRC...")
+    iron = load_iron_ore_from_csv_for_dates(iron_csv, dates)
+
     st.info("Buscando USD/BRL PTAX (BCB Olinda) para as datas...")
     usdbrl = fetch_ptax_usdbrl_buy_for_dates(dates)
 
     st.info("Buscando USD/CNY (FRED) para as datas...")
     usdcny = fetch_fred_series_for_dates(dates, fred_key=fred_key, series_id=fred_series)
 
-    st.info("Buscando Iron Ore (TradingEconomics) para as datas...")
-    iron = fetch_tradingeconomics_iron_ore_for_dates(dates, te_key=te_key)
-
     # Merge
-    df = crc_df.merge(iron, on="date", how="left") \
-               .merge(usdbrl, on="date", how="left") \
-               .merge(usdcny, on="date", how="left")
+    df = (
+        crc_df.merge(iron, on="date", how="left")
+        .merge(usdbrl, on="date", how="left")
+        .merge(usdcny, on="date", how="left")
+    )
 
     # Enrich metrics
     st.info("Calculando variações e métricas (YoY, 6M, 3M, 1M, correlações, volatilidade)...")
