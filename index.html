@@ -9,6 +9,8 @@
 <!-- Plotly & PapaParse -->
 <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+
 
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap');
@@ -638,6 +640,149 @@ function initRanges(){
   setRangeActive('range-iron', RANGES.iron);
   setRangeActive('range-freight', RANGES.freight);
   setRangeActive('range-fx', RANGES.fx);
+
+/* ---------- Export PDF (3 charts per page) ---------- */
+async function ensureSectionOpen(sectionId, drawFn){
+  const cardId = sectionId + '-card';
+  const cardWrap = document.getElementById(cardId);
+  if(!cardWrap) return;
+  const titlebar = document.querySelector(`.titlebar[data-target="${cardId}"]`);
+  const caret = titlebar ? titlebar.querySelector('.caret') : null;
+
+  const isClosed = (cardWrap.style.display==='none' || cardWrap.style.maxHeight==='0px' || cardWrap.style.maxHeight==='0');
+  if (isClosed){
+    setExpanded(cardWrap, caret, true);
+    // draw after expanding so Plotly gets correct width
+    await new Promise(r=>setTimeout(r, 180));
+    try{ drawFn && drawFn(); }catch(e){}
+  } else {
+    // already open: just redraw to ensure it's current
+    try{ drawFn && drawFn(); }catch(e){}
+  }
+  // give Plotly a beat to finish rendering
+  await new Promise(r=>setTimeout(r, 220));
+  // force resize (helps when accordion animation changed sizes)
+  const charts = cardWrap.querySelectorAll('.js-plotly-plot');
+  charts.forEach(ch => { try{ Plotly.Plots.resize(ch); }catch(e){} });
+  await new Promise(r=>setTimeout(r, 120));
+}
+
+function dataUrlToImageSize(dataUrl){
+  return new Promise((resolve, reject)=>{
+    const img = new Image();
+    img.onload = ()=> resolve({w: img.naturalWidth || img.width, h: img.naturalHeight || img.height});
+    img.onerror = reject;
+    img.src = dataUrl;
+  });
+}
+
+async function plotlyDivToPng(divId){
+  const el = document.getElementById(divId);
+  if(!el) return null;
+  // higher scale improves quality in PDF
+  try{
+    return await Plotly.toImage(el, {format:'png', scale: 2});
+  }catch(e){
+    console.warn('Plotly.toImage failed for', divId, e);
+    return null;
+  }
+}
+
+async function exportAllToPDF(){
+  const btn = document.getElementById('btnExportAll');
+  if(btn){
+    btn.disabled = true;
+    btn.textContent = 'Gerando PDF...';
+  }
+
+  try{
+    // Make sure everything is rendered
+    await ensureSectionOpen('geral', drawGeral);
+    await ensureSectionOpen('crc', drawCRC);
+    await ensureSectionOpen('iron', drawIron);
+    await ensureSectionOpen('freight', drawFreight);
+    await ensureSectionOpen('fx', drawFX);
+
+    const items = [
+      {id:'chartGeral',  title:'Visão Geral'},
+      {id:'chartCRC',    title:'Aço CRC China (USD/TON)'},
+      {id:'chartIron',   title:'Minério de Ferro (USD/TON)'},
+      {id:'chartFreight',title:'Frete Marítimo (USD/TEU)'},
+      {id:'chartFX',     title:'Taxas de Câmbio (USD/BRL e USD/CNY)'},
+    ];
+
+    // Capture images
+    const shots = [];
+    for(const it of items){
+      const png = await plotlyDivToPng(it.id);
+      if(png) shots.push({ ...it, png });
+    }
+    if(!shots.length) throw new Error('Nenhum gráfico pôde ser exportado.');
+
+    // jsPDF (A4 portrait) — 3 charts per page
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({orientation:'p', unit:'mm', format:'a4'});
+
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+
+    const marginX = 10;
+    const marginTop = 10;
+    const marginBottom = 10;
+    const gap = 6;
+
+    const boxW = pageW - marginX*2;
+    const boxH = (pageH - marginTop - marginBottom - gap*2) / 3;
+
+    const fontTitle = 10;
+    const titlePad = 3; // inside each box
+    const imgPad = 2;
+
+    for(let i=0;i<shots.length;i++){
+      const pageIndex = Math.floor(i/3);
+      const slot = i % 3;
+      if(i>0 && slot===0) doc.addPage();
+
+      const y0 = marginTop + slot*(boxH + gap);
+
+      // Title
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(fontTitle);
+      doc.text(shots[i].title, marginX, y0 + fontTitle);
+
+      // Compute image fitting inside (boxW x (boxH - title area))
+      const availY = y0 + fontTitle + titlePad;
+      const availH = boxH - (fontTitle + titlePad);
+
+      const {w:iw, h:ih} = await dataUrlToImageSize(shots[i].png);
+      let wmm = boxW;
+      let hmm = (ih/iw) * wmm;
+
+      if(hmm > availH){
+        hmm = availH;
+        wmm = (iw/ih) * hmm;
+      }
+
+      const xImg = marginX + (boxW - wmm)/2;
+      const yImg = availY + (availH - hmm)/2;
+
+      doc.addImage(shots[i].png, 'PNG', xImg, yImg, wmm, hmm, undefined, 'FAST');
+    }
+
+    const ts = new Date();
+    const fname = `Indices_Moveleiro_${ts.getFullYear()}-${String(ts.getMonth()+1).padStart(2,'0')}-${String(ts.getDate()).padStart(2,'0')}.pdf`;
+    doc.save(fname);
+  } finally {
+    if(btn){
+      btn.disabled = false;
+      btn.textContent = 'Exportar PDF';
+    }
+  }
+}
+
+// wire up
+document.getElementById('btnExportAll')?.addEventListener('click', exportAllToPDF);
+
 })();
 </script>
 </body>
