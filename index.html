@@ -13,107 +13,160 @@
   <style>
     body {
       margin: 0;
-      font-family: Inter, Arial, sans-serif;
+      padding: 20px;
       background: #0f0f0f;
       color: #eaeaea;
+      font-family: Inter, Arial, sans-serif;
+    }
+
+    h1 {
+      margin-bottom: 10px;
+    }
+
+    .toolbar {
+      margin-bottom: 20px;
+    }
+
+    button {
+      padding: 10px 16px;
+      font-size: 14px;
+      background: #1f6feb;
+      border: none;
+      color: #fff;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    .chart {
+      margin-bottom: 40px;
     }
   </style>
 </head>
 
 <body>
 
-  <!-- Hidden logo used only for PDF export -->
+  <h1>Índices Moveleiro</h1>
+
+  <div class="toolbar">
+    <button onclick="exportAllToPDF()">Exportar PDF</button>
+  </div>
+
+  <!-- Hidden logo used only for PDF -->
   <img
     id="pdfLogo"
     src="ckstsourcinglogoAtivo 1Openfield MV logo.png"
     style="display:none"
   />
 
-  <!-- ======================================================
-       YOUR EXISTING DASHBOARD CONTENT STAYS UNCHANGED
-       (charts with ids below must already exist)
-       chartOverview
-       chartCRC
-       chartIronOre
-       chartFreight
-       chartFX
-  ======================================================= -->
+  <!-- ===================== CHARTS ===================== -->
 
-<script>
-async function exportAllToPDF() {
-  const { jsPDF } = window.jspdf;
-  const pdf = new jsPDF("p", "mm", "a4");
+  <div id="chartOverview" class="chart"></div>
+  <div id="chartCRC" class="chart"></div>
+  <div id="chartIronOre" class="chart"></div>
+  <div id="chartFreight" class="chart"></div>
+  <div id="chartFX" class="chart"></div>
 
-  const pageWidth = pdf.internal.pageSize.getWidth();
-  const pageHeight = pdf.internal.pageSize.getHeight();
-
-  // Layout
-  const marginX = 15;
-  const topMargin = 28;
-  const spacing = 12;
-
-  const usableWidth = pageWidth - marginX * 2;
-  const chartHeight = (pageHeight - topMargin * 2 - spacing) / 2;
-
-  let currentY = topMargin;
-  let chartsOnPage = 0;
-  let firstPage = true;
-
-  const logo = document.getElementById("pdfLogo");
-
-  const charts = [
-    { id: "chartOverview", title: "Visão Geral" },
-    { id: "chartCRC", title: "CRC Steel" },
-    { id: "chartIronOre", title: "Minério de Ferro" },
-    { id: "chartFreight", title: "Frete Internacional" },
-    { id: "chartFX", title: "Câmbio" }
-  ];
-
-  for (const chart of charts) {
-    const el = document.getElementById(chart.id);
-    if (!el) continue;
-
-    // New page after 2 charts
-    if (chartsOnPage === 2) {
-      pdf.addPage();
-      currentY = topMargin;
-      chartsOnPage = 0;
-      firstPage = false;
+  <!-- ===================== SAMPLE CHART DATA ===================== -->
+  <script>
+    function makeChart(id, title) {
+      Plotly.newPlot(
+        id,
+        [{
+          x: ["Jan", "Fev", "Mar", "Abr", "Mai"],
+          y: [10, 14, 13, 18, 16],
+          type: "scatter",
+          mode: "lines+markers",
+          line: { width: 3 }
+        }],
+        {
+          title,
+          paper_bgcolor: "#0f0f0f",
+          plot_bgcolor: "#0f0f0f",
+          font: { color: "#eaeaea" },
+          margin: { t: 50, l: 50, r: 30, b: 40 }
+        },
+        { responsive: true }
+      );
     }
 
-    // Logo only on first page
-    if (firstPage && chartsOnPage === 0 && logo) {
-      pdf.addImage(logo, "PNG", marginX, 12, 35, 10);
-      currentY += 6;
+    makeChart("chartOverview", "Visão Geral");
+    makeChart("chartCRC", "CRC Steel");
+    makeChart("chartIronOre", "Minério de Ferro");
+    makeChart("chartFreight", "Frete Internacional");
+    makeChart("chartFX", "Câmbio");
+  </script>
+
+  <!-- ===================== PDF EXPORT ===================== -->
+  <script>
+    async function exportAllToPDF() {
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF("p", "mm", "a4");
+
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+
+      const marginX = 15;
+      const topMargin = 28;
+      const spacing = 12;
+
+      const usableWidth = pageWidth - marginX * 2;
+      const chartHeight = (pageHeight - topMargin * 2 - spacing) / 2;
+
+      let currentY = topMargin;
+      let chartsOnPage = 0;
+      let firstPage = true;
+
+      const logo = document.getElementById("pdfLogo");
+
+      const charts = [
+        { id: "chartOverview", title: "Visão Geral" },
+        { id: "chartCRC", title: "CRC Steel" },
+        { id: "chartIronOre", title: "Minério de Ferro" },
+        { id: "chartFreight", title: "Frete Internacional" },
+        { id: "chartFX", title: "Câmbio" }
+      ];
+
+      for (const chart of charts) {
+        const el = document.getElementById(chart.id);
+        if (!el) continue;
+
+        if (chartsOnPage === 2) {
+          pdf.addPage();
+          currentY = topMargin;
+          chartsOnPage = 0;
+          firstPage = false;
+        }
+
+        if (firstPage && chartsOnPage === 0 && logo) {
+          pdf.addImage(logo, "PNG", marginX, 12, 35, 10);
+          currentY += 6;
+        }
+
+        pdf.setFontSize(11);
+        pdf.text(chart.title, marginX, currentY);
+        currentY += 4;
+
+        const img = await Plotly.toImage(el, {
+          format: "png",
+          scale: 2
+        });
+
+        pdf.addImage(
+          img,
+          "PNG",
+          marginX,
+          currentY,
+          usableWidth,
+          chartHeight
+        );
+
+        currentY += chartHeight + spacing;
+        chartsOnPage++;
+      }
+
+      pdf.save("Indices_Moveleiro.pdf");
     }
-
-    // Chart title
-    pdf.setFontSize(11);
-    pdf.text(chart.title, marginX, currentY);
-    currentY += 4;
-
-    // Export chart
-    const img = await Plotly.toImage(el, {
-      format: "png",
-      scale: 2
-    });
-
-    pdf.addImage(
-      img,
-      "PNG",
-      marginX,
-      currentY,
-      usableWidth,
-      chartHeight
-    );
-
-    currentY += chartHeight + spacing;
-    chartsOnPage++;
-  }
-
-  pdf.save("Indices_Moveleiro.pdf");
-}
-</script>
+  </script>
 
 </body>
 </html>
