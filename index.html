@@ -688,96 +688,177 @@ async function plotlyDivToPng(divId){
   }
 }
 
-async function exportAllToPDF(){
-  const btn = document.getElementById('btnExportAll');
-  if(btn){
-    btn.disabled = true;
-    btn.textContent = 'Gerando PDF...';
+async function exportAllToPDF() {
+  const { jsPDF } = window.jspdf;
+  const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+
+  // -------- CONFIG --------
+  const REPORT_TITLE = "Índices Moveleiro — Openfield";
+  const now = new Date();
+  const dateStr = now.toLocaleDateString("pt-BR");
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const filename = `Indices_Moveleiro_${y}-${m}.pdf`;
+
+  // Chart groups (keeps your export order, with clean section breaks)
+  const groups = [
+    {
+      name: "Visão Geral",
+      charts: [{ id: "chartGeral", title: "Visão Geral" }]
+    },
+    {
+      name: "Matérias-primas",
+      charts: [
+        { id: "chartCRC", title: "CRC Steel" },
+        { id: "chartIron", title: "Minério de Ferro" }
+      ]
+    },
+    {
+      name: "Logística e Câmbio",
+      charts: [
+        { id: "chartFreight", title: "Frete Internacional" },
+        { id: "chartFX", title: "Câmbio" }
+      ]
+    }
+  ];
+
+  // -------- LAYOUT (A4 landscape) --------
+  const pageWidth = pdf.internal.pageSize.getWidth();
+  const pageHeight = pdf.internal.pageSize.getHeight();
+
+  const marginX = 12;
+  const marginBottom = 10;
+
+  const headerTop = 7;
+  const headerHeight = 18;
+
+  const sectionGap = 6;      // space after section divider
+  const chartTitleGap = 4;   // space after chart title
+  const betweenCharts = 10;  // vertical gap between the 2 charts on a page
+
+  const usableWidth = pageWidth - marginX * 2;
+  const usableHeight = pageHeight - headerHeight - marginBottom;
+
+  // Two charts per page
+  const chartHeight = (usableHeight - sectionGap - chartTitleGap * 2 - betweenCharts) / 2;
+
+  // -------- HELPERS --------
+  const logo = document.getElementById("pdfLogo");
+
+  function drawHeader(isFirstPage) {
+    // thin rule under header
+    pdf.setDrawColor(210);
+    pdf.setLineWidth(0.3);
+    pdf.line(marginX, headerHeight, pageWidth - marginX, headerHeight);
+
+    // logo only on first page
+    if (isFirstPage && logo) {
+      try {
+        pdf.addImage(logo, "PNG", marginX, headerTop, 32, 10);
+      } catch (e) {
+        // ignore logo errors (still export PDF)
+      }
+      pdf.setFontSize(14);
+      pdf.text(REPORT_TITLE, marginX + 38, headerTop + 6);
+      pdf.setFontSize(10);
+      pdf.setTextColor(80);
+      pdf.text(`Data: ${dateStr}`, marginX + 38, headerTop + 12);
+      pdf.setTextColor(0);
+    } else {
+      pdf.setFontSize(14);
+      pdf.text(REPORT_TITLE, marginX, headerTop + 6);
+      pdf.setFontSize(10);
+      pdf.setTextColor(80);
+      pdf.text(`Data: ${dateStr}`, marginX, headerTop + 12);
+      pdf.setTextColor(0);
+    }
   }
 
-  try{
-    // Make sure everything is rendered
-    await ensureSectionOpen('geral', drawGeral);
-    await ensureSectionOpen('crc', drawCRC);
-    await ensureSectionOpen('iron', drawIron);
-    await ensureSectionOpen('freight', drawFreight);
-    await ensureSectionOpen('fx', drawFX);
+  function drawSectionDivider(sectionName, y) {
+    pdf.setFontSize(11);
+    pdf.setTextColor(60);
+    pdf.text(sectionName.toUpperCase(), marginX, y);
 
-    const items = [
-      {id:'chartGeral',  title:'Visão Geral'},
-      {id:'chartCRC',    title:'Aço CRC China (USD/TON)'},
-      {id:'chartIron',   title:'Minério de Ferro (USD/TON)'},
-      {id:'chartFreight',title:'Frete Marítimo (USD/TEU)'},
-      {id:'chartFX',     title:'Taxas de Câmbio (USD/BRL e USD/CNY)'},
-    ];
+    // subtle line to the right of the section title
+    const textWidth = pdf.getTextWidth(sectionName.toUpperCase());
+    const lineStart = marginX + textWidth + 6;
+    pdf.setDrawColor(210);
+    pdf.setLineWidth(0.4);
+    pdf.line(lineStart, y - 1.5, pageWidth - marginX, y - 1.5);
 
-    // Capture images
-    const shots = [];
-    for(const it of items){
-      const png = await plotlyDivToPng(it.id);
-      if(png) shots.push({ ...it, png });
+    pdf.setTextColor(0);
+  }
+
+  async function addChartToPDF(el, title, x, y, w, h) {
+    // chart title
+    pdf.setFontSize(11);
+    pdf.setTextColor(0);
+    pdf.text(title, x, y);
+    const imgData = await Plotly.toImage(el, { format: "png", scale: 2 });
+    pdf.addImage(imgData, "PNG", x, y + chartTitleGap, w, h);
+  }
+
+  // -------- EXPORT FLOW --------
+  let isFirstPage = true;
+
+  drawHeader(true);
+  let currentY = headerHeight + 8;
+
+  for (let gi = 0; gi < groups.length; gi++) {
+    const group = groups[gi];
+
+    // each group starts on a fresh page (clean divider + consistent spacing)
+    if (gi > 0) {
+      pdf.addPage();
+      isFirstPage = false;
+      drawHeader(false);
+      currentY = headerHeight + 8;
     }
-    if(!shots.length) throw new Error('Nenhum gráfico pôde ser exportado.');
 
-    // jsPDF (A4 portrait) — 3 charts per page
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({orientation:'p', unit:'mm', format:'a4'});
+    drawSectionDivider(group.name, currentY);
+    currentY += sectionGap;
 
-    const pageW = doc.internal.pageSize.getWidth();
-    const pageH = doc.internal.pageSize.getHeight();
+    // we still keep 2 charts per page, full width
+    let chartsOnThisPage = 0;
 
-    const marginX = 10;
-    const marginTop = 10;
-    const marginBottom = 10;
-    const gap = 6;
+    for (const ch of group.charts) {
+      const el = document.getElementById(ch.id);
+      if (!el) continue;
 
-    const boxW = pageW - marginX*2;
-    const boxH = (pageH - marginTop - marginBottom - gap*2) / 3;
-
-    const fontTitle = 10;
-    const titlePad = 3; // inside each box
-    const imgPad = 2;
-
-    for(let i=0;i<shots.length;i++){
-      const pageIndex = Math.floor(i/3);
-      const slot = i % 3;
-      if(i>0 && slot===0) doc.addPage();
-
-      const y0 = marginTop + slot*(boxH + gap);
-
-      // Title
-      doc.setFont('helvetica', 'bold');
-      doc.setFontSize(fontTitle);
-      doc.text(shots[i].title, marginX, y0 + fontTitle);
-
-      // Compute image fitting inside (boxW x (boxH - title area))
-      const availY = y0 + fontTitle + titlePad;
-      const availH = boxH - (fontTitle + titlePad);
-
-      const {w:iw, h:ih} = await dataUrlToImageSize(shots[i].png);
-      let wmm = boxW;
-      let hmm = (ih/iw) * wmm;
-
-      if(hmm > availH){
-        hmm = availH;
-        wmm = (iw/ih) * hmm;
+      if (chartsOnThisPage === 2) {
+        pdf.addPage();
+        drawHeader(false);
+        currentY = headerHeight + 8;
+        drawSectionDivider(group.name, currentY);
+        currentY += sectionGap;
+        chartsOnThisPage = 0;
       }
 
-      const xImg = marginX + (boxW - wmm)/2;
-      const yImg = availY + (availH - hmm)/2;
+      await addChartToPDF(
+        el,
+        ch.title,
+        marginX,
+        currentY,
+        usableWidth,
+        chartHeight
+      );
 
-      doc.addImage(shots[i].png, 'PNG', xImg, yImg, wmm, hmm, undefined, 'FAST');
-    }
-
-    const ts = new Date();
-    const fname = `Indices_Moveleiro_${ts.getFullYear()}-${String(ts.getMonth()+1).padStart(2,'0')}-${String(ts.getDate()).padStart(2,'0')}.pdf`;
-    doc.save(fname);
-  } finally {
-    if(btn){
-      btn.disabled = false;
-      btn.textContent = 'Exportar PDF';
+      currentY += chartTitleGap + chartHeight + betweenCharts;
+      chartsOnThisPage += 1;
     }
   }
+
+  // -------- PAGE NUMBERS (bottom-right) --------
+  const totalPages = pdf.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) {
+    pdf.setPage(i);
+    pdf.setFontSize(9);
+    pdf.setTextColor(110);
+    pdf.text(`${i} / ${totalPages}`, pageWidth - marginX, pageHeight - 4, { align: "right" });
+    pdf.setTextColor(0);
+  }
+
+  pdf.save(filename);
 }
 
 // wire up
@@ -785,5 +866,6 @@ document.getElementById('btnExportAll')?.addEventListener('click', exportAllToPD
 
 })();
 </script>
+  <img id="pdfLogo" src="ckstsourcinglogoAtivo 1Openfield MV logo.png" style="display:none">
 </body>
 </html>
