@@ -5,6 +5,50 @@ import requests
 import pandas as pd
 import numpy as np
 from datetime import date, timedelta
+import yfinance as yf
+import pandas as pd
+import streamlit as st
+
+def fetch_steelbenchmarker_pdf():
+    """
+    Downloads the SteelBenchmarker PDF directly into memory.
+    """
+    url = "http://steelbenchmarker.com/history.pdf"
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+    }
+    
+    try:
+        response = requests.get(url, headers=headers, timeout=15)
+        response.raise_for_status() # Check for errors
+        return io.BytesIO(response.content)
+    except Exception as e:
+        st.error(f"Erro ao baixar PDF do SteelBenchmarker: {e}")
+        return None
+
+def fetch_iron_ore_automated():
+    """
+    Fetches SGX Iron Ore 62% Fe Futures (TIO=F) via Yahoo Finance.
+    Returns a DataFrame compliant with the app's structure.
+    """
+    try:
+        # Ticker TIO=F is the standard SGX Iron Ore 62% Fe CFR
+        ticker = yf.Ticker("TIO=F")
+        
+        # Download 'max' history to ensure we cover the PDF dates
+        hist = ticker.history(period="5y") 
+        
+        # Reset index to make Date a column and clean up
+        df = hist.reset_index()[['Date', 'Close']]
+        df.columns = ['Date', 'Price']
+        
+        # Ensure Date format matches what the app expects (datetime objects)
+        df['Date'] = pd.to_datetime(df['Date']).dt.tz_localize(None)
+        
+        return df
+    except Exception as e:
+        st.error(f"Erro ao baixar Iron Ore do Yahoo Finance: {e}")
+        return None
 
 
 def _to_datestr_iso(d: date) -> str:
