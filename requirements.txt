@@ -1,12 +1,6 @@
-streamlit>=1.37,<2
-pandas>=2.2,<2.3
-numpy>=2.0,<3
-requests>=2.31,<3
-
-pdfplumber==0.11.4
-# NÃO fixe pdfminer-six; pdfplumber resolve automaticamente
-
-python-dateutil>=2.9
-plotly>=5.22
-kaleido==0.2.1
-reportlab>=4.2
+streamlit
+pandas
+numpy
+requests
+pdfplumber
+yfinance
