@@ -1,17 +1,14 @@
-# src/fetchers.py
-import io
-import time
 import requests
 import pandas as pd
-import numpy as np
-from datetime import date, timedelta
-import yfinance as yf
-import pandas as pd
+import io
 import streamlit as st
+import yfinance as yf
+from datetime import datetime, timedelta
 
+# --- 1. FUNÇÃO DO STEELBENCHMARKER (PDF) ---
 def fetch_steelbenchmarker_pdf():
     """
-    Downloads the SteelBenchmarker PDF directly into memory.
+    Baixa o PDF do SteelBenchmarker diretamente para a memória.
     """
     url = "http://steelbenchmarker.com/history.pdf"
     headers = {
@@ -20,29 +17,30 @@ def fetch_steelbenchmarker_pdf():
     
     try:
         response = requests.get(url, headers=headers, timeout=15)
-        response.raise_for_status() # Check for errors
+        response.raise_for_status()
         return io.BytesIO(response.content)
     except Exception as e:
         st.error(f"Erro ao baixar PDF do SteelBenchmarker: {e}")
         return None
 
+# --- 2. FUNÇÃO DO MINÉRIO (YAHOO FINANCE) ---
 def fetch_iron_ore_automated():
     """
-    Fetches SGX Iron Ore 62% Fe Futures (TIO=F) via Yahoo Finance.
-    Returns a DataFrame compliant with the app's structure.
+    Baixa dados do SGX Iron Ore 62% Fe (TIO=F) via Yahoo Finance.
+    Retorna DataFrame com colunas ['Date', 'Price'].
     """
     try:
-        # Ticker TIO=F is the standard SGX Iron Ore 62% Fe CFR
+        # Ticker TIO=F é o futuro padrão de minério 62%
         ticker = yf.Ticker("TIO=F")
         
-        # Download 'max' history to ensure we cover the PDF dates
-        hist = ticker.history(period="5y") 
+        # Baixa histórico de 5 anos para garantir cobertura
+        hist = ticker.history(period="5y")
         
-        # Reset index to make Date a column and clean up
+        # Limpeza e formatação
         df = hist.reset_index()[['Date', 'Close']]
         df.columns = ['Date', 'Price']
         
-        # Ensure Date format matches what the app expects (datetime objects)
+        # Remove timezone para evitar conflitos de merge
         df['Date'] = pd.to_datetime(df['Date']).dt.tz_localize(None)
         
         return df
@@ -50,178 +48,80 @@ def fetch_iron_ore_automated():
         st.error(f"Erro ao baixar Iron Ore do Yahoo Finance: {e}")
         return None
 
-
-def _to_datestr_iso(d: date) -> str:
-    return d.strftime("%Y-%m-%d")
-
-
-def _to_bcb_mmddyyyy(d: date) -> str:
-    return d.strftime("%m-%d-%Y")
-
-
-def _nearest_prev_business_day(d: date) -> date:
-    while d.weekday() >= 5:
-        d = d - timedelta(days=1)
-    return d
-
-
-def fetch_ptax_usdbrl_buy_for_dates(dates: list[date]) -> pd.DataFrame:
+# --- 3. FUNÇÃO DO DÓLAR PTAX (BANCO CENTRAL) ---
+def fetch_usd_brl_ptax(start_date):
     """
-    BCB Olinda PTAX - CotacaoDolarDia -> cotacaoCompra
-    Se não houver cotação na data (feriado/fim de semana), busca o dia útil anterior.
+    Busca a taxa de compra PTAX do Dólar (USD/BRL) na API do Banco Central.
     """
-    base = (
-        "https://olinda.bcb.gov.br/olinda/servico/PTAX/versao/v1/odata/"
-        "CotacaoDolarDia(dataCotacao=@dataCotacao)"
-    )
+    # Formata data para API (MM-DD-YYYY)
+    data_inicial = start_date.strftime('%m-%d-%Y')
+    data_final = datetime.today().strftime('%m-%d-%Y')
+    
+    url = f"https://olinda.bcb.gov.br/olinda/servico/PTAX/versao/v1/odata/CotacaoDolarPeriodo(dataInicial=@dataInicial,dataFinalCotacao=@dataFinalCotacao)?@dataInicial='{data_inicial}'&@dataFinalCotacao='{data_final}'&$top=10000&$format=json&$select=cotacaoCompra,dataHoraCotacao"
 
-    out = []
-    session = requests.Session()
+    try:
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        
+        if 'value' not in data or len(data['value']) == 0:
+            st.warning("Nenhum dado encontrado na API do BCB.")
+            return pd.DataFrame(columns=['date', 'USD_BRL_buy'])
 
-    for d in dates:
-        dd = _nearest_prev_business_day(d)
-        ok = False
-        for _ in range(5):
-            params = {
-                "@dataCotacao": f"'{_to_bcb_mmddyyyy(dd)}'",
-                "$select": "cotacaoCompra,dataHoraCotacao",
-                "$format": "json",
-            }
-            r = session.get(base, params=params, timeout=30)
-            if r.status_code >= 500:
-                time.sleep(1.0)
-                continue
-            r.raise_for_status()
-            js = r.json()
-            values = js.get("value", [])
-            if values:
-                out.append({"date": d, "USD/BRL": float(values[0]["cotacaoCompra"])})
-                ok = True
-                break
-            dd = dd - timedelta(days=1)
+        df = pd.DataFrame(data['value'])
+        
+        # Renomear e formatar
+        df.rename(columns={'cotacaoCompra': 'USD_BRL_buy', 'dataHoraCotacao': 'date'}, inplace=True)
+        df['date'] = pd.to_datetime(df['date']).dt.normalize() # Remove horas
+        
+        return df[['date', 'USD_BRL_buy']]
+        
+    except Exception as e:
+        st.error(f"Erro na API do Banco Central: {e}")
+        return pd.DataFrame(columns=['date', 'USD_BRL_buy'])
 
-        if not ok:
-            out.append({"date": d, "USD/BRL": None})
-
-    return pd.DataFrame(out)
-
-
-def fetch_fred_series_for_dates(
-    dates: list[date], fred_key: str, series_id: str = "DEXCHUS"
-) -> pd.DataFrame:
+# --- 4. FUNÇÃO DO YUAN (FRED - FEDERAL RESERVE) ---
+def fetch_usd_cny_fred():
     """
-    FRED series observations. Retorna o valor no dia (ou último dia anterior com dado).
+    Busca a taxa de câmbio USD/CNY no FRED (St. Louis Fed).
+    Requer FRED_API_KEY configurado nos Secrets do Streamlit.
     """
-    start = min(dates)
-    end = max(dates)
+    series_id = st.secrets.get("FRED_SERIES_USD_CNY", "DEXCHUS")
+    api_key = st.secrets.get("FRED_API_KEY")
+
+    if not api_key:
+        st.error("ERRO: FRED_API_KEY não encontrada nos Secrets do Streamlit.")
+        return pd.DataFrame(columns=['date', 'USD_CNY'])
 
     url = "https://api.stlouisfed.org/fred/series/observations"
     params = {
         "series_id": series_id,
-        "api_key": fred_key,
+        "api_key": api_key,
         "file_type": "json",
-        "observation_start": _to_datestr_iso(start - timedelta(days=10)),
-        "observation_end": _to_datestr_iso(end),
+        "sort_order": "desc",
+        "limit": 1000  # Pega os últimos ~3-4 anos (dias úteis)
     }
 
-    r = requests.get(url, params=params, timeout=30)
-    r.raise_for_status()
-    js = r.json()
+    try:
+        response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        
+        observations = data.get("observations", [])
+        if not observations:
+            return pd.DataFrame(columns=['date', 'USD_CNY'])
 
-    obs = js.get("observations", [])
-    data = []
-    for o in obs:
-        ds = o.get("date")
-        val = o.get("value")
-        if not ds or val in (None, ".", ""):
-            continue
-        try:
-            data.append((pd.to_datetime(ds).date(), float(val)))
-        except Exception:
-            pass
-
-    if not data:
-        return pd.DataFrame({"date": dates, "USD/CNY": [None] * len(dates)})
-
-    ser = pd.Series({d: v for d, v in data}).sort_index()
-
-    out = []
-    for d in dates:
-        dd = d
-        v = None
-        for _ in range(10):
-            if dd in ser.index:
-                v = float(ser.loc[dd])
-                break
-            dd = dd - timedelta(days=1)
-        out.append({"date": d, "USD/CNY": v})
-
-    return pd.DataFrame(out)
-
-
-def load_iron_ore_from_csv_for_dates(uploaded_file, dates: list[date]) -> pd.DataFrame:
-    """
-    Reads uploaded Iron Ore CSV and returns:
-      date (CRC dates) + Iron Ore (USD/TON)
-
-    Uses only the first 2 columns of the CSV: Date and Price.
-    If the exact date is missing, uses nearest previous available date (up to 30 days).
-    """
-    content = uploaded_file.getvalue()
-
-    # Try sniff delimiter automatically (works for comma/semicolon/tab)
-    df = pd.read_csv(io.BytesIO(content), sep=None, engine="python", encoding_errors="ignore")
-
-    if df.shape[1] < 2:
-        return pd.DataFrame({"date": dates, "Iron Ore (USD/TON)": [np.nan] * len(dates)})
-
-    dcol = df.columns[0]
-    pcol = df.columns[1]
-
-    tmp = df[[dcol, pcol]].copy()
-    tmp.columns = ["Date", "Price"]
-
-    # ---- DATE PARSING (robust) ----
-    dt1 = pd.to_datetime(tmp["Date"], errors="coerce", dayfirst=False)
-    if dt1.notna().mean() < 0.6:
-        dt2 = pd.to_datetime(tmp["Date"], errors="coerce", dayfirst=True)
-        tmp["Date"] = dt2
-    else:
-        tmp["Date"] = dt1
-
-    # ---- PRICE PARSING (robust, handles decimal comma) ----
-    s = tmp["Price"].astype(str).str.strip()
-    s = s.str.replace(r"[^\d\.\,\-]", "", regex=True)
-
-    # "113,89" -> "113.89"
-    mask_decimal_comma = s.str.contains(",", na=False) & ~s.str.contains(r"\.", na=False)
-    s.loc[mask_decimal_comma] = s.loc[mask_decimal_comma].str.replace(",", ".", regex=False)
-
-    # "1,234.56" -> "1234.56"
-    mask_thousands_comma = s.str.contains(",", na=False) & s.str.contains(r"\.", na=False)
-    s.loc[mask_thousands_comma] = s.loc[mask_thousands_comma].str.replace(",", "", regex=False)
-
-    tmp["Price"] = pd.to_numeric(s, errors="coerce")
-
-    tmp = tmp.dropna(subset=["Date", "Price"])
-    if tmp.empty:
-        return pd.DataFrame({"date": dates, "Iron Ore (USD/TON)": [np.nan] * len(dates)})
-
-    tmp["Date"] = tmp["Date"].dt.date
-    tmp = tmp.sort_values("Date")
-
-    # If duplicate dates, keep last
-    ser = tmp.groupby("Date", as_index=True)["Price"].last().sort_index()
-
-    out = []
-    for d in dates:
-        dd = d
-        val = None
-        for _ in range(30):
-            if dd in ser.index:
-                val = float(ser.loc[dd])
-                break
-            dd = dd - timedelta(days=1)
-        out.append({"date": d, "Iron Ore (USD/TON)": val})
-
-    return pd.DataFrame(out)
+        df = pd.DataFrame(observations)
+        
+        # Limpeza
+        df['value'] = pd.to_numeric(df['value'], errors='coerce') # Converte "." para NaN
+        df.dropna(subset=['value'], inplace=True)
+        
+        df['date'] = pd.to_datetime(df['date'])
+        df.rename(columns={'value': 'USD_CNY'}, inplace=True)
+        
+        return df[['date', 'USD_CNY']]
+        
+    except Exception as e:
+        st.error(f"Erro na API do FRED: {e}")
+        return pd.DataFrame(columns=['date', 'USD_CNY'])
