@@ -48,25 +48,39 @@ if 'pdf_bytes' in st.session_state and 'df_iron' in st.session_state:
                 # 1. Extrair PDF
                 df_crc = extract_crc_china_page12(st.session_state['pdf_bytes'])
                 
+                # --- CORREÇÃO AQUI ---
+                # Força a coluna 'date' para o formato datetime correto
+                df_crc['date'] = pd.to_datetime(df_crc['date'])
+                # ---------------------
+
                 # 2. Buscar Câmbio
+                # Agora min() vai funcionar corretamente com datas
                 df_ptax = fetch_usd_brl_ptax(start_date=df_crc['date'].min())
                 df_cny = fetch_usd_cny_fred()
                 
                 # 3. Merge (Juntar tudo)
+                # Ordena por data (obrigatório para merge_asof)
                 final_df = df_crc.sort_values('date')
                 df_iron_sorted = st.session_state['df_iron'].sort_values('Date')
                 
+                # Garante que o Iron Ore também é datetime (segurança extra)
+                df_iron_sorted['Date'] = pd.to_datetime(df_iron_sorted['Date'])
+
                 # Merge inteligente do Minério (Backward search)
                 final_df = pd.merge_asof(
-                    final_df, df_iron_sorted, left_on='date', right_on='Date', 
-                    direction='backward', tolerance=pd.Timedelta(days=7)
+                    final_df, 
+                    df_iron_sorted, 
+                    left_on='date', 
+                    right_on='Date', 
+                    direction='backward', 
+                    tolerance=pd.Timedelta(days=7)
                 )
                 
                 # Merge Câmbio
                 final_df = pd.merge(final_df, df_ptax, on='date', how='left')
                 final_df = pd.merge(final_df, df_cny, on='date', how='left')
                 
-                # Finalizar colunas
+                # Finalizar colunas e limpeza
                 final_df['Sea_Freight_USD_ton'] = ""
                 final_df.rename(columns={'Price': 'Iron_Ore_USD_ton'}, inplace=True)
                 
@@ -75,7 +89,8 @@ if 'pdf_bytes' in st.session_state and 'df_iron' in st.session_state:
                 final_df = final_df[[c for c in cols if c in final_df.columns]]
                 
                 st.session_state['final_df'] = final_df
-                st.success("Sucesso!")
+                st.success("Sucesso! CSV gerado.")
+                
         except Exception as e:
             st.error(f"Erro: {e}")
 
