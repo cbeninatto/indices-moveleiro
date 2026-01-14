@@ -61,12 +61,21 @@ if 'pdf_bytes' in st.session_state and 'df_iron' in st.session_state:
                 # 3. Merge (Juntar tudo)
                 # Ordena por data (obrigatório para merge_asof)
                 final_df = df_crc.sort_values('date')
-                df_iron_sorted = st.session_state['df_iron'].sort_values('Date')
                 
-                # Garante que o Iron Ore também é datetime (segurança extra)
+                # Prepara Dataframes Auxiliares (Garante ordenação e Datetime)
+                df_iron_sorted = st.session_state['df_iron'].sort_values('Date')
                 df_iron_sorted['Date'] = pd.to_datetime(df_iron_sorted['Date'])
+                
+                df_ptax_sorted = df_ptax.sort_values('date')
+                df_ptax_sorted['date'] = pd.to_datetime(df_ptax_sorted['date'])
+                
+                df_cny_sorted = df_cny.sort_values('date')
+                df_cny_sorted['date'] = pd.to_datetime(df_cny_sorted['date'])
 
-                # Merge inteligente do Minério (Backward search)
+                # --- MERGE INTELIGENTE (Backward Search) ---
+                # Procura o valor da data exata. Se não achar, pega o anterior mais próximo (até 7 dias)
+                
+                # 1. Junta Minério
                 final_df = pd.merge_asof(
                     final_df, 
                     df_iron_sorted, 
@@ -76,9 +85,23 @@ if 'pdf_bytes' in st.session_state and 'df_iron' in st.session_state:
                     tolerance=pd.Timedelta(days=7)
                 )
                 
-                # Merge Câmbio
-                final_df = pd.merge(final_df, df_ptax, on='date', how='left')
-                final_df = pd.merge(final_df, df_cny, on='date', how='left')
+                # 2. Junta PTAX (USD/BRL)
+                final_df = pd.merge_asof(
+                    final_df, 
+                    df_ptax_sorted, 
+                    on='date', 
+                    direction='backward',
+                    tolerance=pd.Timedelta(days=7)
+                )
+
+                # 3. Junta Yuan (USD/CNY) <-- Isso resolve o problema do dia 12
+                final_df = pd.merge_asof(
+                    final_df, 
+                    df_cny_sorted, 
+                    on='date', 
+                    direction='backward',
+                    tolerance=pd.Timedelta(days=7)
+                )
                 
                 # Finalizar colunas e limpeza
                 final_df['Sea_Freight_USD_ton'] = ""
@@ -89,10 +112,7 @@ if 'pdf_bytes' in st.session_state and 'df_iron' in st.session_state:
                 final_df = final_df[[c for c in cols if c in final_df.columns]]
                 
                 st.session_state['final_df'] = final_df
-                st.success("Sucesso! CSV gerado.")
-                
-        except Exception as e:
-            st.error(f"Erro: {e}")
+                st.success("Sucesso! CSV gerado com preenchimento inteligente de datas.")
 
 # --- 3. DOWNLOAD ---
 if 'final_df' in st.session_state:
